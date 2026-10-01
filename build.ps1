@@ -1,4 +1,4 @@
-param([string]$Version = '1.3.1.0')
+﻿param([string]$Version = '1.3.2.0')
 $ErrorActionPreference = 'Stop'
 $repoRoot = $PSScriptRoot
 $msbuild = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe'
@@ -29,4 +29,3 @@ $actualVersion = [Reflection.AssemblyName]::GetAssemblyName($exePath).Version.To
 if ($actualVersion -ne $Version) { throw "Expected $Version, built $actualVersion. Update AssemblyInfo.cs first." }
 (Get-FileHash -LiteralPath $exePath -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content (Join-Path $destination 'AtroxLauncher.exe.sha256') -Encoding ascii
 Write-Host "Built $exePath ($actualVersion)"
-

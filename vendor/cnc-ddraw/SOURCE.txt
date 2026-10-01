@@ -1,0 +1,7 @@
+cnc-ddraw v7.1.0.0
+Upstream: https://github.com/FunkyFr3sh/cnc-ddraw
+Source tag: https://github.com/FunkyFr3sh/cnc-ddraw/tree/v7.1.0.0
+Binary archive: https://github.com/FunkyFr3sh/cnc-ddraw/releases/download/v7.1.0.0/cnc-ddraw.zip
+ddraw.dll SHA256: 85e0f7d530dfda134793a57cb3e76b0287dcc96892ee57162dd68f47283b03a9
+License: MIT (see LICENSE)
+The launcher embeds the unmodified upstream DLL and deploys it with the license.

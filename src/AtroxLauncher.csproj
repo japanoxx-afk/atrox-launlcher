@@ -95,9 +95,6 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="MainForm.AtroxOverlay.cs">
-      <SubType>Form</SubType>
-    </Compile>
     <Compile Include="MainForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -107,6 +104,8 @@
     <Compile Include="Program.cs" />
     <Compile Include="LauncherUpdate.cs" />
     <Compile Include="GameFiles.cs" />
+    <Compile Include="GamePatches.cs" />
+    <Compile Include="GameRenderer.cs" />
     <Compile Include="Bootstrap.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <EmbeddedResource Include="MainForm.resx">
@@ -153,6 +152,8 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="*.dll" />
+    <EmbeddedResource Include="..\vendor\cnc-ddraw\ddraw.dll"><LogicalName>AtroxLauncher.Rendering.ddraw.dll</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="..\vendor\cnc-ddraw\LICENSE"><LogicalName>AtroxLauncher.Rendering.LICENSE</LogicalName></EmbeddedResource>
     <EmbeddedResource Include="..\packages\Newtonsoft.Json.12.0.2\lib\net45\Newtonsoft.Json.dll"><LogicalName>AtroxLauncher.Newtonsoft.Json.dll</LogicalName></EmbeddedResource>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

@@ -28,10 +28,18 @@ namespace AtroxLauncher
         string ConfigPath => "Config.json";
         string LinkLabelLink = "https://cafe.naver.com/atroxs";
         bool isInit;
+        readonly ComboBox scrollSpeed = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new System.Drawing.Point(120, 217), Size = new System.Drawing.Size(132, 21) };
 
         public MainForm()
         {
             InitializeComponent();
+            Controls.Add(new Label { Text = "화면 이동 속도", AutoSize = true, Location = new System.Drawing.Point(14, 221) });
+            scrollSpeed.Items.AddRange(new object[] { "20% (아주 느림)", "40% (권장)", "60%", "80%", "100% (기존)" });
+            scrollSpeed.SelectedIndex = 1;
+            scrollSpeed.SelectedIndexChanged += WriteConfig;
+            Controls.Add(scrollSpeed);
+            WindowModeCheckBox.Text = "창 모드 시작 (Alt+Enter: 전체화면 전환)";
+            OverlayInfoLabel.Text = "Alt+Enter: 전체화면 / 창 모드";
             Text = "AtroxLauncher v" + LauncherUpdate.CurrentVersion.ToString(3);
             var updateButton = new Button { Text = "런처 업데이트", Location = new System.Drawing.Point(14, 248), Size = new System.Drawing.Size(140, 30), TabIndex = 18 };
             updateButton.Click += async (sender, args) => {
@@ -74,6 +82,8 @@ namespace AtroxLauncher
 
             var jObject = JObject.Parse(File.ReadAllText(configSource));
             var configDirectory = Path.GetDirectoryName(configSource);
+            var speed = (int?)jObject["ScrollSpeedPercent"] ?? 40;
+            scrollSpeed.SelectedIndex = Math.Max(0, Math.Min(4, speed / 20 - 1));
 
             AtroxFolderPath = GameFiles.ResolvePath(jObject["AtroxFolderPath"].ToString(), configDirectory);
             JPakPath = GameFiles.ResolvePath(jObject["JPakPath"].ToString(), configDirectory);
@@ -121,6 +131,7 @@ namespace AtroxLauncher
             {
                 { "AtroxFolderPath", AtroxFolderPath },
                 { "JPakPath", JPakPath },
+                { "ScrollSpeedPercent", (scrollSpeed.SelectedIndex + 1) * 20 },
                 { "CustomScenario", ScenarioListBox.SelectedItem?.ToString() ?? "" },
                 { "Hyperlink", new JArray{ LinkLabel.Text, LinkLabelLink } },
                 // { "NoCD", new JArray{ NoCdCheckBox.Enabled.ToString(), NoCdCheckBox.CheckState.ToString() } },
@@ -200,6 +211,7 @@ namespace AtroxLauncher
                 if (File.Exists(AtroxPath) && !File.Exists(AtroxPath + ".original")) File.Copy(AtroxPath, AtroxPath + ".original");
                 File.Copy(template, AtroxPath, true);
                 PatchAtrox();
+                GameRenderer.Install(gameDirectory, WindowModeCheckBox.Checked);
                 var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Path.GetFullPath(AtroxPath)) { WorkingDirectory = gameDirectory });
                 if (process == null) throw new IOException("게임 프로세스를 시작하지 못했습니다.");
             }
@@ -241,7 +253,7 @@ namespace AtroxLauncher
 
         void PatchAtrox()
         {
-            using (var stream = File.OpenWrite(AtroxPath))
+            using (var stream = File.Open(AtroxPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
             using (var writer = new BinaryWriter(stream))
             {
                 if (NoCdCheckBox.CheckState == CheckState.Checked)
@@ -250,20 +262,7 @@ namespace AtroxLauncher
                     writer.Write((byte)0x4B);
                 }
 
-                if (WindowModeCheckBox.CheckState == CheckState.Checked)
-                {
-                    writer.Seek(0x000894EB, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0xB8, 0x01, 0x00, 0x00, 0x00, 0x50, 0xE8, 0xE1, 0x80, 0xF7, 0xFF, 0xEB, 0x32 });
-
-                    writer.Seek(0x00089521, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0xEB, 0xC8, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 });
-
-                    writer.Seek(0x000DC497, SeekOrigin.Begin);
-                    writer.Write((byte)0x00);
-
-                    writer.Seek(0x0017C626, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0xE9, 0xC1, 0x00, 0x00, 0x00, 0x90 });
-                }
+                // Keep the game's native fullscreen DirectDraw path. cnc-ddraw owns window mode and scaling.
 
                 if (HighResolutionCheckBox.CheckState == CheckState.Checked)
                 {
@@ -336,15 +335,6 @@ namespace AtroxLauncher
                     writer.Seek(0x0002D4B8, SeekOrigin.Begin);
                     writer.Write(new byte[] { 0x56, 0xE8, 0xBC, 0x9D, 0xFD, 0xFF, 0xEB, 0xBD, 0x90, 0x90, 0x90, 0x53, 0xE8, 0x4B, 0x4F, 0xFD, 0xFF, 0xEB, 0xBE, 0x90, 0x90, 0x90, 0x90, 0x90 });
 
-                    writer.Seek(0x000894EB, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0xB8, 0x01, 0x00, 0x00, 0x00, 0x50, 0xE8, 0xE1, 0x80, 0xF7, 0xFF, 0xEB, 0x32 });
-
-                    writer.Seek(0x00089521, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0xEB, 0xC8, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 });
-
-                    writer.Seek(0x000DC497, SeekOrigin.Begin);
-                    writer.Write((byte)0x00);
-
                     writer.Seek(0x000DC862, SeekOrigin.Begin);
                     writer.Write(new byte[] { 0x00, 0x05 });
 
@@ -407,6 +397,7 @@ namespace AtroxLauncher
                         writer.Write((byte)0x02);
                     }
                 }
+                GamePatches.Apply(writer, HighResolutionCheckBox.Checked, (scrollSpeed.SelectedIndex + 1) * 20);
             }
         }
     }
