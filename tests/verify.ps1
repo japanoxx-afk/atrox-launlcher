@@ -7,6 +7,15 @@ $ErrorActionPreference = 'Stop'
 $exe = Join-Path $PSScriptRoot '..\dist\AtroxLauncher.exe'
 $assembly = [Reflection.Assembly]::LoadFile((Resolve-Path $exe).Path)
 $flags = [Reflection.BindingFlags]'Static,NonPublic'
+$normalizeVersion = $assembly.GetType('AtroxLauncher.LauncherUpdate', $true).GetMethod('NormalizeVersion', $flags)
+foreach ($inputVersion in @('1.6', '1.6.0', '1.6.0.0')) {
+    if ($normalizeVersion.Invoke($null, [object[]]@([Version]$inputVersion)) -ne [Version]'1.6.0.0') {
+        throw 'Release version component normalization failed.'
+    }
+}
+if ($normalizeVersion.Invoke($null, [object[]]@([Version]'1.6.0.1')) -ne [Version]'1.6.0.1') {
+    throw 'Release revision was lost.'
+}
 $type = $assembly.GetType('AtroxLauncher.GameFiles', $true)
 $resolve = $type.GetMethod('ResolvePath', $flags)
 $base = Join-Path ([IO.Path]::GetTempPath()) 'AtroxLauncherVerify'

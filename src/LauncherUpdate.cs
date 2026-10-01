@@ -37,11 +37,15 @@ namespace AtroxLauncher
                 var assets = (JArray)json["assets"];
                 Func<string, string> asset = name => assets.Where(a => (string)a["name"] == name)
                     .Select(a => (string)a["browser_download_url"]).SingleOrDefault();
-                var result = new Release { Version = version, Url = asset("AtroxLauncher.exe"), HashUrl = asset("AtroxLauncher.exe.sha256") };
+                var result = new Release { Version = NormalizeVersion(version), Url = asset("AtroxLauncher.exe"), HashUrl = asset("AtroxLauncher.exe.sha256") };
                 if (result.Url == null || result.HashUrl == null) throw new InvalidDataException("릴리스에 실행 파일 또는 검증 파일이 없습니다.");
                 ValidateUrl(result.Url); ValidateUrl(result.HashUrl);
                 return result;
             }
+        }
+        internal static Version NormalizeVersion(Version version)
+        {
+            return new Version(version.Major, version.Minor, Math.Max(0, version.Build), Math.Max(0, version.Revision));
         }
         private static HttpClient Client()
         {
