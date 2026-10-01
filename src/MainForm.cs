@@ -23,26 +23,19 @@ namespace AtroxLauncher
         }
         string JPakPathExtractPath => $@"{AtroxFolderPath}\atrox_pak";
 
-        readonly string scenarioDirectory = Path.Combine(Path.GetDirectoryName(GameFiles.ConfigSource), "CustomScenario");
-        string ScenarioFolderPath => scenarioDirectory;
         string ConfigPath => "Config.json";
         string LinkLabelLink = "https://cafe.naver.com/atroxs";
         bool isInit;
         static readonly int[] ScrollRates = { 5, 10, 20, 40, 60, 80, 100 };
-        readonly ComboBox scrollSpeed = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new System.Drawing.Point(120, 217), Size = new System.Drawing.Size(132, 21) };
+        readonly ComboBox scrollSpeed = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
 
         public MainForm()
         {
             InitializeComponent();
-            Controls.Add(new Label { Text = "화면 이동 속도", AutoSize = true, Location = new System.Drawing.Point(14, 221) });
             scrollSpeed.Items.AddRange(new object[] { "5% (아주 느림)", "10% (권장)", "20%", "40%", "60%", "80%", "100% (기존)" });
             scrollSpeed.SelectedIndex = 1;
             scrollSpeed.SelectedIndexChanged += WriteConfig;
-            Controls.Add(scrollSpeed);
-            WindowModeCheckBox.Text = "창 모드 시작 (Alt+Enter: 전체화면 전환)";
-            OverlayInfoLabel.Text = "Alt+Enter: 전체화면 / 창 모드";
             Text = "AtroxLauncher v" + LauncherUpdate.CurrentVersion.ToString(3);
-            var updateButton = new Button { Text = "런처 업데이트", Location = new System.Drawing.Point(14, 248), Size = new System.Drawing.Size(140, 30), TabIndex = 18 };
             updateButton.Click += async (sender, args) => {
                 updateButton.Enabled = false;
                 try {
@@ -58,15 +51,6 @@ namespace AtroxLauncher
                 } catch (Exception ex) { MessageBox.Show(ex.Message, "업데이트 실패", MessageBoxButtons.OK, MessageBoxIcon.Error); }
                 finally { updateButton.Text = "런처 업데이트"; updateButton.Enabled = true; }
             };
-            Controls.Add(updateButton);
-
-            if (Directory.Exists(ScenarioFolderPath))
-            {
-                foreach (var fileName in Directory.GetFiles(ScenarioFolderPath, "*.zip", SearchOption.TopDirectoryOnly).Select(t => Path.GetFileNameWithoutExtension(t)))
-                {
-                    ScenarioListBox.Items.Add(fileName);
-                }
-            }
 
             try { ReadConfig(); }
             catch (Exception ex) { isInit = true; MessageBox.Show("설정을 읽지 못했습니다. 경로와 옵션을 확인해 주세요.\n" + ex.Message, "설정 오류"); }
@@ -91,16 +75,6 @@ namespace AtroxLauncher
             AtroxFolderPath = GameFiles.ResolvePath(jObject["AtroxFolderPath"].ToString(), configDirectory);
             JPakPath = GameFiles.ResolvePath(jObject["JPakPath"].ToString(), configDirectory);
 
-            var target = jObject["CustomScenario"].ToString();
-            foreach (var item in ScenarioListBox.Items)
-            {
-                if (item.ToString() == target)
-                {
-                    ScenarioListBox.SelectedItem = item;
-                    break;
-                }
-            }
-
             LinkLabel.Text = jObject["Hyperlink"][0].ToString();
             LinkLabelLink = jObject["Hyperlink"][1].ToString();
 
@@ -116,8 +90,6 @@ namespace AtroxLauncher
             // ParameterCheckBox.CheckState = EnumParse<CheckState>(jObject["ReadMapData"][1].ToString());
             CustomPakCheckBox.CheckState = EnumParse<CheckState>(jObject["CustomPak"][1].ToString());
 
-            ScenarioLabel.Enabled = CustomPakCheckBox.CheckState == CheckState.Checked;
-            ScenarioListBox.Enabled = CustomPakCheckBox.CheckState == CheckState.Checked;
             isInit = true;
 
             T EnumParse<T>(string value)
@@ -136,7 +108,6 @@ namespace AtroxLauncher
                 { "JPakPath", JPakPath },
                 { "ScrollSpeedPercent", ScrollRates[scrollSpeed.SelectedIndex] },
                 { "ScrollSpeedRevision", 2 },
-                { "CustomScenario", ScenarioListBox.SelectedItem?.ToString() ?? "" },
                 { "Hyperlink", new JArray{ LinkLabel.Text, LinkLabelLink } },
                 // { "NoCD", new JArray{ NoCdCheckBox.Enabled.ToString(), NoCdCheckBox.CheckState.ToString() } },
                 { "WindowMode", new JArray{ WindowModeCheckBox.Enabled.ToString(), WindowModeCheckBox.CheckState.ToString() } },
@@ -149,13 +120,6 @@ namespace AtroxLauncher
                 else File.Move(ConfigPath + ".tmp", ConfigPath);
             } catch (Exception ex) { MessageBox.Show("설정 저장 실패: " + ex.Message); }
 
-            ScenarioLabel.Enabled = CustomPakCheckBox.CheckState == CheckState.Checked;
-            ScenarioListBox.Enabled = CustomPakCheckBox.CheckState == CheckState.Checked;
-        }
-
-        void MainForm_Click(object sender, EventArgs e)
-        {
-            ScenarioListBox.ClearSelected();
         }
 
         void PathButton_Click(object sender, EventArgs e)
@@ -208,8 +172,6 @@ namespace AtroxLauncher
                 {
                     if (!File.Exists(JPakPath)) throw new FileNotFoundException("JPak 경로를 확인해 주세요.");
                     InstallArchive(JPakPath, Path.Combine(gameDirectory, "atrox_pak"));
-                    if (ScenarioListBox.SelectedItem != null)
-                        InstallArchive(Path.Combine(ScenarioFolderPath, ScenarioListBox.SelectedItem + ".zip"), Path.Combine(gameDirectory, @"atrox_pak\maps\scenario"));
                 }
                 // Keep the user's previous executable; always patch a fresh supported template.
                 if (File.Exists(AtroxPath) && !File.Exists(AtroxPath + ".original")) File.Copy(AtroxPath, AtroxPath + ".original");

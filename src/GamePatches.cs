@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Collections.Generic;
 
 namespace AtroxLauncher
 {
@@ -9,6 +10,45 @@ namespace AtroxLauncher
         internal const int TerrainCave = 0x63610;
         internal const int ScrollHook = 0x2d473;
         internal const int ScrollCave = 0x2d2b0;
+        internal const int RallyCave = 0x14160;
+
+        internal static byte[] BuildResourceRally()
+        {
+            var code = new List<byte>();
+            var exits = new List<int>();
+            Action<byte[]> emit = bytes => code.AddRange(bytes);
+            Action<int> number = value => code.AddRange(BitConverter.GetBytes(value));
+            Action<int> call = target => { code.Add(0xe8); number(target - (0x400000 + RallyCave + code.Count + 4)); };
+            Action<byte> skip = condition => { emit(new byte[] { 0x0f, condition }); exits.Add(code.Count); number(0); };
+            emit(new byte[] { 0x9c, 0x60, 0x89, 0xce, 0x8b, 0x7c, 0x24, 40 }); // Save state; ESI=unit, EDI=order.
+            // +4 contains race/base-class flags, NOT a worker flag. Match the concrete
+            // vtables from the supported binary: Ozzy, Nailer and Engineer.
+            emit(new byte[] { 0x81, 0x3e }); number(0x5e4ef0);
+            emit(new byte[] { 0x74, 20 });
+            emit(new byte[] { 0x81, 0x3e }); number(0x5e34f4);
+            emit(new byte[] { 0x74, 12 });
+            emit(new byte[] { 0x81, 0x3e }); number(0x5e082c); skip(0x85);
+            emit(new byte[] { 0xff, 0x77, 0x10, 0xff, 0x77, 0x0c, 0x8b, 0x86 }); number(0x3ac);
+            emit(new byte[] { 0x0f, 0xbf, 0x40, 4, 0x50 }); // Owning player and rally world X/Y.
+            call(0x40517d); // Native world hit test; no mouse coordinates or local-player state.
+            emit(new byte[] { 0x83, 0xc4, 12, 0x85, 0xc0 }); skip(0x84);
+            emit(new byte[] { 0x89, 0xc3, 0x8b, 0x0d }); number(0xb27700);
+            emit(new byte[] { 0x8b, 0x49, 8, 0x8b, 0x04, 0x81, 0x85, 0xc0 }); skip(0x84);
+            emit(new byte[] { 0x6a, 0, 0x68 }); number(0x666310); // CGERESMineral RTTI (muon).
+            code.Add(0x68); number(0x621910); // CGEntity RTTI.
+            emit(new byte[] { 0x6a, 0, 0x50 }); call(0x5946b7); // Native dynamic_cast.
+            emit(new byte[] { 0x83, 0xc4, 20, 0x85, 0xc0 }); skip(0x84);
+            emit(new byte[] { 0x80, 0xb8 }); number(0x104); code.Add(0); skip(0x85); // Reject inactive target.
+            emit(new byte[] { 0xc7, 0x07 }); number(0x3a); // Native Gather command.
+            emit(new byte[] { 0x66, 0xc7, 0x47, 4, 2, 0, 0x89, 0x5f, 12 }); // Entity target instead of position.
+            foreach (var offset in exits)
+            {
+                var relative = BitConverter.GetBytes(code.Count - offset - 4);
+                for (var i = 0; i < 4; i++) code[offset + i] = relative[i];
+            }
+            emit(new byte[] { 0x61, 0x9d, 0xff, 0xa0, 0xa0, 0, 0, 0 }); // Tail-call original dispatch, retaining its stack.
+            return code.ToArray();
+        }
 
         internal static byte[] BuildScroll(int percent)
         {
@@ -64,7 +104,15 @@ namespace AtroxLauncher
             writer.Seek(ScrollHook, SeekOrigin.Begin);
             writer.Write((byte)0xe9); writer.Write(ScrollCave - ScrollHook - 5);
             writer.Write(Enumerable.Repeat((byte)0x90, 5).ToArray());
+            Expect(writer, 0x104118, new byte[] { 0xff, 0x90, 0xa0, 0, 0, 0 });
+            Expect(writer, RallyCave, Enumerable.Repeat((byte)0xcc, 432).ToArray());
+            writer.Seek(RallyCave, SeekOrigin.Begin); writer.Write(BuildResourceRally());
+            writer.Seek(0x104118, SeekOrigin.Begin);
+            writer.Write((byte)0xe8); writer.Write(RallyCave - 0x104118 - 5); writer.Write((byte)0x90);
             if (!highResolution) return;
+            // Keep the HUD sprite hit test; remove the old 800x600-era full-width Y cutoff.
+            Expect(writer, 0x1d5c4, new byte[] { 0xe6, 1, 0, 0 });
+            writer.Seek(0x1d5c4, SeekOrigin.Begin); writer.Write(1024);
             // Render the world to the bottom; the centered HUD draws over it afterwards.
             // Remove the old black side fills entirely, retaining the game's normal UI/cursor pass.
             Expect(writer, 0xdc87d, new byte[] { 0xb0, 3, 0, 0 });
