@@ -6,8 +6,7 @@ namespace AtroxLauncher
 {
     internal static class GamePatches
     {
-        internal const int HudHook = 0x63209;
-        internal const int HudCave = 0x63610;
+        internal const int TerrainCave = 0x63610;
         internal const int ScrollHook = 0x2d473;
         internal const int ScrollCave = 0x2d2b0;
 
@@ -35,26 +34,24 @@ namespace AtroxLauncher
                 return stream.ToArray();
             }
         }
-        internal static byte[] BuildHudClear()
+        internal static byte[] BuildTileRows()
         {
-            using (var stream = new MemoryStream())
-            using (var writer = new BinaryWriter(stream))
-            {
-                writer.Write(new byte[] { 0x9c, 0x60 }); // Preserve flags and all general registers.
-                foreach (var x in new[] { 0, 1040 })
-                {
-                    // The game's own indexed-color fill draws inclusive endpoints.
-                    foreach (var argument in new[] { 0, 107, 239, 916, x, 0 })
-                    { writer.Write((byte)0x68); writer.Write(argument); }
-                    writer.Write((byte)0xb9); writer.Write(0xde8cf0);
-                    writer.Write((byte)0xe8);
-                    writer.Write(0x405e43 - (0x400000 + HudCave + (int)stream.Position + 4));
-                }
-                writer.Write(new byte[] { 0x61, 0x9d, 0x8b, 0x0d, 0x30, 0x77, 0xb2, 0x00 });
-                writer.Write((byte)0xe9);
-                writer.Write(0x400000 + HudHook + 6 - (0x400000 + HudCave + (int)stream.Position + 4));
-                return stream.ToArray();
-            }
+            // ceil(viewportHeight / 40), using the original signed division sequence.
+            var code = new byte[] { 0x83, 0xc1, 39, 0xf7, 0xe9, 0xc1, 0xfa, 4, 0xe9, 0, 0, 0, 0 };
+            BitConverter.GetBytes(0x4dc8f8 - (0x400000 + TerrainCave + code.Length)).CopyTo(code, 9);
+            return code;
+        }
+
+        internal static byte[] BuildTerrainWrap()
+        {
+            // EAX is source Y. The wrapped part ends at sourceY - (cacheHeight - viewportHeight).
+            // The original hardcoded subtraction of 40 only worked for heights divisible by 40.
+            var code = new byte[] {
+                0x8b, 0x8e, 0x3c, 0xc5, 0x35, 0, 0x6b, 0xc9, 40,
+                0x2b, 0x0d, 0x7c, 0x6e, 0xb2, 0, 0x29, 0xc8,
+                0x55, 0x57, 0xb9, 0xf0, 0x8c, 0xde, 0, 0xe9, 0, 0, 0, 0 };
+            BitConverter.GetBytes(0x4b8e73 - (0x400000 + TerrainCave + 32 + code.Length)).CopyTo(code, 25);
+            return code;
         }
 
         internal static void Apply(BinaryWriter writer, bool highResolution, int scrollPercent)
@@ -68,12 +65,29 @@ namespace AtroxLauncher
             writer.Write((byte)0xe9); writer.Write(ScrollCave - ScrollHook - 5);
             writer.Write(Enumerable.Repeat((byte)0x90, 5).ToArray());
             if (!highResolution) return;
-            Expect(writer, HudHook, new byte[] { 0x8b, 0x0d, 0x30, 0x77, 0xb2, 0x00 });
-            Expect(writer, HudCave, Enumerable.Repeat((byte)0xcc, 176).ToArray());
-            writer.Seek(HudCave, SeekOrigin.Begin);
-            writer.Write(BuildHudClear());
-            writer.Seek(HudHook, SeekOrigin.Begin);
-            writer.Write((byte)0xe9); writer.Write(HudCave - HudHook - 5); writer.Write((byte)0x90);
+            // Render the world to the bottom; the centered HUD draws over it afterwards.
+            // Remove the old black side fills entirely, retaining the game's normal UI/cursor pass.
+            Expect(writer, 0xdc87d, new byte[] { 0xb0, 3, 0, 0 });
+            writer.Seek(0xdc87d, SeekOrigin.Begin); writer.Write(1024);
+            Expect(writer, TerrainCave, Enumerable.Repeat((byte)0xcc, 176).ToArray());
+            Expect(writer, 0xdc8f3, new byte[] { 0xf7, 0xe9, 0xc1, 0xfa, 4 });
+            Expect(writer, 0xb8e69, new byte[] { 0x83, 0xc0, 0xd8, 0x55, 0x57, 0xb9, 0xf0, 0x8c, 0xde, 0 });
+            // Secondary terrain surface: 1024 + 56 = 1080, matching 27 cached 40-pixel rows.
+            Expect(writer, 0x17c60d, new byte[] { 0x83, 0xc2, 0xd8 });
+            Expect(writer, 0x17561d, new byte[] { 0x8d, 0x46, 0xd8 });
+            writer.Seek(0x17c60f, SeekOrigin.Begin); writer.Write((byte)56);
+            writer.Seek(0x17561f, SeekOrigin.Begin); writer.Write((byte)56);
+            writer.Seek(TerrainCave, SeekOrigin.Begin); writer.Write(BuildTileRows());
+            writer.Seek(TerrainCave + 32, SeekOrigin.Begin); writer.Write(BuildTerrainWrap());
+            WriteJump(writer, 0xdc8f3, TerrainCave, 5);
+            WriteJump(writer, 0xb8e69, TerrainCave + 32, 10);
+        }
+
+        static void WriteJump(BinaryWriter writer, int offset, int target, int length)
+        {
+            writer.Seek(offset, SeekOrigin.Begin);
+            writer.Write((byte)0xe9); writer.Write(target - offset - 5);
+            writer.Write(Enumerable.Repeat((byte)0x90, length - 5).ToArray());
         }
 
         static void Expect(BinaryWriter writer, int offset, byte[] expected)
