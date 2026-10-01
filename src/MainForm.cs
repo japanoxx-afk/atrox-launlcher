@@ -31,6 +31,24 @@ namespace AtroxLauncher
         public MainForm()
         {
             InitializeComponent();
+            Text = "AtroxLauncher v" + LauncherUpdate.CurrentVersion.ToString(3);
+            var updateButton = new Button { Text = "런처 업데이트", Location = new System.Drawing.Point(14, 248), Size = new System.Drawing.Size(140, 30), TabIndex = 18 };
+            updateButton.Click += async (sender, args) => {
+                updateButton.Enabled = false;
+                try {
+                    var release = await LauncherUpdate.FindAsync();
+                    if (release == null) { MessageBox.Show("아직 배포된 업데이트가 없습니다.", "런처 업데이트"); return; }
+                    if (release.Version <= LauncherUpdate.CurrentVersion) { MessageBox.Show("최신 버전입니다.", "런처 업데이트"); return; }
+                    if (System.Diagnostics.Process.GetProcessesByName("Atrox").Length != 0) { MessageBox.Show("게임을 종료한 후 업데이트해 주세요."); return; }
+                    updateButton.Text = "다운로드 중…";
+                    var downloaded = await LauncherUpdate.DownloadAsync(release);
+                    WriteConfig();
+                    LauncherUpdate.StartApply(downloaded);
+                    Close();
+                } catch (Exception ex) { MessageBox.Show(ex.Message, "업데이트 실패", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+                finally { updateButton.Text = "런처 업데이트"; updateButton.Enabled = true; }
+            };
+            Controls.Add(updateButton);
 
             if (Directory.Exists(ScenarioFolderPath))
             {
@@ -40,7 +58,8 @@ namespace AtroxLauncher
                 }
             }
 
-            ReadConfig();
+            try { ReadConfig(); }
+            catch (Exception ex) { isInit = true; MessageBox.Show("설정을 읽지 못했습니다. 경로와 옵션을 확인해 주세요.\n" + ex.Message, "설정 오류"); }
         }
 
         void ReadConfig()
@@ -107,7 +126,10 @@ namespace AtroxLauncher
                 // { "ReadMapData", new JArray{ ParameterCheckBox.Enabled.ToString(), ParameterCheckBox.CheckState.ToString() } },
                 { "CustomPak", new JArray{ CustomPakCheckBox.Enabled.ToString(), CustomPakCheckBox.CheckState.ToString() } }
             };
-            File.WriteAllText(ConfigPath, jObject.ToString());
+            try { File.WriteAllText(ConfigPath + ".tmp", jObject.ToString());
+                if (File.Exists(ConfigPath)) File.Replace(ConfigPath + ".tmp", ConfigPath, ConfigPath + ".previous");
+                else File.Move(ConfigPath + ".tmp", ConfigPath);
+            } catch (Exception ex) { MessageBox.Show("설정 저장 실패: " + ex.Message); }
 
             ScenarioLabel.Enabled = CustomPakCheckBox.CheckState == CheckState.Checked;
             ScenarioListBox.Enabled = CustomPakCheckBox.CheckState == CheckState.Checked;
@@ -134,7 +156,7 @@ namespace AtroxLauncher
         {
             var dialog = new OpenFileDialog
             {
-                InitialDirectory = Path.GetFullPath(JPakPath),
+                InitialDirectory = string.IsNullOrWhiteSpace(JPakPath) ? Application.StartupPath : Path.GetDirectoryName(Path.GetFullPath(JPakPath)),
                 FileName = Path.GetFileName(JPakPath),
                 Filter = "JPak file|*.jpak"
             };
@@ -155,43 +177,64 @@ namespace AtroxLauncher
 
         void RunButton_Click(object sender, EventArgs e)
         {
-            if (CustomPakCheckBox.CheckState == CheckState.Checked)
-            {
-                if (Directory.Exists(JPakPathExtractPath))
-                {
-                    Directory.Delete(JPakPathExtractPath, true);
-                }
-                ZipFile.ExtractToDirectory(JPakPath, JPakPathExtractPath);
-            }
-
-            var mapsFolderPath = $@"{JPakPathExtractPath}\maps\scenario";
-            if (Directory.Exists(mapsFolderPath) && ScenarioListBox.Enabled && ScenarioListBox.SelectedItem != null)
-            {
-                Directory.Delete(mapsFolderPath, true);
-                ZipFile.ExtractToDirectory($@"{ScenarioFolderPath}\{ScenarioListBox.SelectedItem.ToString()}.zip", mapsFolderPath);
-            }
-
-            File.Copy("Atrox.ex_", AtroxPath, true);
-            PatchAtrox();
+            RunButton.Enabled = false;
             try
             {
-                var process = System.Diagnostics.Process.Start(AtroxPath);
-                process.EnableRaisingEvents = true;
-                process.Exited += (s, args) => OnGameEnd();
+                if (System.Diagnostics.Process.GetProcessesByName("Atrox").Length != 0)
+                    throw new IOException("게임이 이미 실행 중입니다. 종료한 후 실행해 주세요.");
+                var gameDirectory = Path.GetFullPath(AtroxFolderPath);
+                if (!Directory.Exists(gameDirectory)) throw new DirectoryNotFoundException("게임 경로를 확인해 주세요.");
+                if (!File.Exists("Atrox.ex_")) throw new FileNotFoundException("기존 런처 폴더의 Atrox.ex_ 파일이 필요합니다.");
+                if (LauncherUpdate.Sha256("Atrox.ex_") != "b9561ed32e1c5f4275862b5b2afda5425fd4600735a1179ffbdf9b5ac603d6f5")
+                    throw new InvalidDataException("지원하지 않는 게임 원본입니다. 잘못된 주소에 패치하지 않도록 실행을 중단했습니다.");
+                if (CustomPakCheckBox.Checked)
+                {
+                    if (!File.Exists(JPakPath)) throw new FileNotFoundException("JPak 경로를 확인해 주세요.");
+                    InstallArchive(JPakPath, Path.Combine(gameDirectory, "atrox_pak"));
+                    if (ScenarioListBox.SelectedItem != null)
+                        InstallArchive(Path.Combine(ScenarioFolderPath, ScenarioListBox.SelectedItem + ".zip"), Path.Combine(gameDirectory, @"atrox_pak\maps\scenario"));
+                }
+                // Keep the user's previous executable; always patch a fresh supported template.
+                if (File.Exists(AtroxPath) && !File.Exists(AtroxPath + ".original")) File.Copy(AtroxPath, AtroxPath + ".original");
+                File.Copy("Atrox.ex_", AtroxPath, true);
+                PatchAtrox();
+                var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Path.GetFullPath(AtroxPath)) { WorkingDirectory = gameDirectory });
+                if (process == null) throw new IOException("게임 프로세스를 시작하지 못했습니다.");
             }
-            catch
-            {
-                OnGameEnd();
-            }
+            catch (Exception ex) { MessageBox.Show(ex.Message, "실행 실패", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+            finally { RunButton.Enabled = true; }
+        }
 
-            void OnGameEnd()
+        internal static void InstallArchive(string archive, string destination)
+        {
+            destination = Path.GetFullPath(destination);
+            var parent = Path.GetDirectoryName(destination);
+            var staging = Path.Combine(parent, "atrox-stage-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(staging);
+            try
             {
-                //if (Directory.Exists(JPakPathExtractPath))
-                //{
-                //    Directory.Delete(JPakPathExtractPath, true);
-                //}
-                //File.Delete(AtroxPath);
+                var root = staging + Path.DirectorySeparatorChar;
+                using (var zip = ZipFile.OpenRead(archive))
+                {
+                    long total = 0;
+                    foreach (var entry in zip.Entries)
+                    {
+                        var path = Path.GetFullPath(Path.Combine(staging, entry.FullName));
+                        if (!path.StartsWith(root, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("압축 파일에 잘못된 경로가 있습니다.");
+                        total += entry.Length;
+                        if (total > 2L * 1024 * 1024 * 1024) throw new InvalidDataException("압축 해제 용량이 너무 큽니다.");
+                        if (string.IsNullOrEmpty(entry.Name)) { Directory.CreateDirectory(path); continue; }
+                        Directory.CreateDirectory(Path.GetDirectoryName(path));
+                        entry.ExtractToFile(path);
+                    }
+                }
+                var backup = destination + ".previous";
+                if (Directory.Exists(backup)) throw new IOException("이전 백업 폴더가 있습니다. 내용을 확인하고 다른 위치로 옮겨 주세요: " + backup);
+                if (Directory.Exists(destination)) Directory.Move(destination, backup);
+                try { Directory.Move(staging, destination); }
+                catch { if (Directory.Exists(backup) && !Directory.Exists(destination)) Directory.Move(backup, destination); throw; }
             }
+            finally { if (Directory.Exists(staging)) Directory.Delete(staging, true); }
         }
 
         void PatchAtrox()

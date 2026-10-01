@@ -12,8 +12,9 @@ namespace AtroxLauncher
         /// 해당 응용 프로그램의 주 진입점입니다.
         /// </summary>
         [STAThread]
-        static void Main()
+        internal static void Run(string[] args)
         {
+            if (args.Length == 4 && args[0] == "--apply-update") { LauncherUpdate.Apply(args); return; }
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new MainForm());
