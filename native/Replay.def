@@ -1,3 +1,4 @@
 LIBRARY AtroxReplay
 EXPORTS
     ReplayEvent=_ReplayEvent@4
+    ConstructionEvent=_ConstructionEvent@8

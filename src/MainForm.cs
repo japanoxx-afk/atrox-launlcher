@@ -233,6 +233,7 @@ namespace AtroxLauncher
             using (var writer = new BinaryWriter(stream))
             {
                 ReplaySupport.Apply(writer);
+                ConstructionSupport.Apply(writer);
                 if (NoCdCheckBox.CheckState == CheckState.Checked)
                 {
                     writer.Seek(0x000D6AC7, SeekOrigin.Begin);

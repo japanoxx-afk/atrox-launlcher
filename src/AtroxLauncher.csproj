@@ -107,6 +107,7 @@
     <Compile Include="GamePatches.cs" />
     <Compile Include="GameRenderer.cs" />
     <Compile Include="ReplaySupport.cs" />
+    <Compile Include="ConstructionSupport.cs" />
     <Compile Include="Bootstrap.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <EmbeddedResource Include="MainForm.resx">

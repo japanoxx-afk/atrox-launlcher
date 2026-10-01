@@ -6,7 +6,7 @@ from unicorn.x86_const import *
 
 image = (Path(__file__).resolve().parent.parent / 'artifacts/replay-patched.bin').read_bytes()
 sites = [(0x4630e0, 0x4630e6, 1), (0x463223, 0x2000000, 2),
-         (0x4b8a60, 0x4b8a65, 1), (0x4b8ef9, 0x4b8f00, 2), (0x4c7271, 0x4c7277, 0)]
+         (0x4b8a60, 0x4b8a65, 1), (0x4b8ef9, 0x4b8f00, 2), (0x4c7271, 0x4c7277, 0), (0x53b440,0x53b445,0), (0x53deb2,0x53deb7,0), (0x466330,0x466335,1), (0x4c6f20,0x4c6f27,2)]
 for site, end, event in sites:
     for mode in ('present', 'load', 'missing', 'noexport'):
         u = Uc(UC_ARCH_X86, UC_MODE_32)
@@ -36,9 +36,22 @@ for site, end, event in sites:
             uc.reg_write(UC_X86_REG_EAX,result)
             uc.reg_write(UC_X86_REG_ECX,0xdead); uc.reg_write(UC_X86_REG_EDX,0xbeef)
             uc.reg_write(UC_X86_REG_ESP,sp+4+pop); uc.reg_write(UC_X86_REG_EIP,ret)
-        u.hook_add(UC_HOOK_CODE,step)
+        old_step = step
+        construction = site in (0x53b440,0x53deb2,0x466330,0x4c6f20)
+        def wrapper(uc,address,size,data):
+            if address == 0x4042b9:
+                sp=uc.reg_read(UC_X86_REG_ESP)
+                ret=struct.unpack('<I',uc.mem_read(sp,4))[0]
+                uc.reg_write(UC_X86_REG_ESP,sp+16);uc.reg_write(UC_X86_REG_EIP,ret)
+                return
+            sp=uc.reg_read(UC_X86_REG_ESP)
+            old_step(uc,address,size,data)
+            if address == 0x2000500 and construction:
+                assert struct.unpack('<I',uc.mem_read(sp+8,4))[0] == (55 if site in (0x53b440,0x53deb2) else 0)
+                uc.reg_write(UC_X86_REG_ESP,uc.reg_read(UC_X86_REG_ESP)+4)
+        u.hook_add(UC_HOOK_CODE,wrapper)
         u.emu_start(site, 0, count=500)
         assert u.reg_read(UC_X86_REG_EIP)==end,(hex(site),mode,'bad return')
         assert calls == ([event] if mode in ('present','load') else []),(hex(site),mode,calls)
-        assert u.reg_read(UC_X86_REG_EAX)==(1 if event==0 else 11)
-print('20 replay trampoline paths passed (all hooks, DLL load/failure, missing export).')
+        assert u.reg_read(UC_X86_REG_EAX)==(1 if site==0x4c7271 else 11)
+print('36 replay/construction trampoline paths passed, including register and argument preservation.')

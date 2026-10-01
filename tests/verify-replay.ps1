@@ -13,6 +13,7 @@ if (Test-Path -LiteralPath $template) {
     $stream = New-Object IO.MemoryStream(,$bytes)
     $writer = New-Object IO.BinaryWriter($stream)
     $type.GetMethod('Apply', $flags).Invoke($null, [object[]]@([IO.BinaryWriter]$writer))
+    $assembly.GetType('AtroxLauncher.ConstructionSupport', $true).GetMethod('Apply', $flags).Invoke($null, [object[]]@([IO.BinaryWriter]$writer))
     foreach ($hook in @(0x630e0,0x63223,0xb8a60,0xb8ef9,0xc7271)) {
         if ($bytes[$hook] -ne 0xe9) { throw 'Missing replay hook.' }
     }
