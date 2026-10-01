@@ -38,8 +38,9 @@ namespace AtroxLauncher
                 Set(config, section, "windowed", "true");
                 Set(config, section, "fullscreen", windowed ? "false" : "true");
                 Set(config, section, "toggle_borderless", "true");
-                Set(config, section, "maintas", "true");
+                Set(config, section, "maintas", "false");
                 Set(config, section, "adjmouse", "true");
+                Set(config, section, "boxing", "false");
                 Set(config, section, "width", "0"); Set(config, section, "height", "0");
                 Set(config, section, "posX", "-32000"); Set(config, section, "posY", "-32000");
                 Set(config, section, "renderer", "direct3d9");

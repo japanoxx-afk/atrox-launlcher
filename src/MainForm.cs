@@ -28,13 +28,14 @@ namespace AtroxLauncher
         string ConfigPath => "Config.json";
         string LinkLabelLink = "https://cafe.naver.com/atroxs";
         bool isInit;
+        static readonly int[] ScrollRates = { 5, 10, 20, 40, 60, 80, 100 };
         readonly ComboBox scrollSpeed = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new System.Drawing.Point(120, 217), Size = new System.Drawing.Size(132, 21) };
 
         public MainForm()
         {
             InitializeComponent();
             Controls.Add(new Label { Text = "화면 이동 속도", AutoSize = true, Location = new System.Drawing.Point(14, 221) });
-            scrollSpeed.Items.AddRange(new object[] { "20% (아주 느림)", "40% (권장)", "60%", "80%", "100% (기존)" });
+            scrollSpeed.Items.AddRange(new object[] { "5% (아주 느림)", "10% (권장)", "20%", "40%", "60%", "80%", "100% (기존)" });
             scrollSpeed.SelectedIndex = 1;
             scrollSpeed.SelectedIndexChanged += WriteConfig;
             Controls.Add(scrollSpeed);
@@ -82,8 +83,10 @@ namespace AtroxLauncher
 
             var jObject = JObject.Parse(File.ReadAllText(configSource));
             var configDirectory = Path.GetDirectoryName(configSource);
-            var speed = (int?)jObject["ScrollSpeedPercent"] ?? 40;
-            scrollSpeed.SelectedIndex = Math.Max(0, Math.Min(4, speed / 20 - 1));
+            // Reset legacy speed settings once: the old patch missed an input path.
+            var speed = (int?)jObject["ScrollSpeedRevision"] == 2 ? (int?)jObject["ScrollSpeedPercent"] ?? 10 : 10;
+            var speedIndex = Array.IndexOf(ScrollRates, speed);
+            scrollSpeed.SelectedIndex = speedIndex < 0 ? 1 : speedIndex;
 
             AtroxFolderPath = GameFiles.ResolvePath(jObject["AtroxFolderPath"].ToString(), configDirectory);
             JPakPath = GameFiles.ResolvePath(jObject["JPakPath"].ToString(), configDirectory);
@@ -131,7 +134,8 @@ namespace AtroxLauncher
             {
                 { "AtroxFolderPath", AtroxFolderPath },
                 { "JPakPath", JPakPath },
-                { "ScrollSpeedPercent", (scrollSpeed.SelectedIndex + 1) * 20 },
+                { "ScrollSpeedPercent", ScrollRates[scrollSpeed.SelectedIndex] },
+                { "ScrollSpeedRevision", 2 },
                 { "CustomScenario", ScenarioListBox.SelectedItem?.ToString() ?? "" },
                 { "Hyperlink", new JArray{ LinkLabel.Text, LinkLabelLink } },
                 // { "NoCD", new JArray{ NoCdCheckBox.Enabled.ToString(), NoCdCheckBox.CheckState.ToString() } },
@@ -320,21 +324,6 @@ namespace AtroxLauncher
                     writer.Seek(0x000238A9, SeekOrigin.Begin);
                     writer.Write(new byte[] { 0xA3, 0x03 });
 
-                    writer.Seek(0x0002D4C0, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0x90, 0x90, 0x90 });
-
-                    writer.Seek(0x0002D477, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0xEB, 0x3C, 0x90, 0x90, 0x90, 0x90 });
-
-                    writer.Seek(0x0002D481, SeekOrigin.Begin);
-                    writer.Write((byte)0x90);
-
-                    writer.Seek(0x0002D484, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0xEB, 0x3A, 0x90, 0x90, 0x90 });
-
-                    writer.Seek(0x0002D4B8, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0x56, 0xE8, 0xBC, 0x9D, 0xFD, 0xFF, 0xEB, 0xBD, 0x90, 0x90, 0x90, 0x53, 0xE8, 0x4B, 0x4F, 0xFD, 0xFF, 0xEB, 0xBE, 0x90, 0x90, 0x90, 0x90, 0x90 });
-
                     writer.Seek(0x000DC862, SeekOrigin.Begin);
                     writer.Write(new byte[] { 0x00, 0x05 });
 
@@ -397,7 +386,7 @@ namespace AtroxLauncher
                         writer.Write((byte)0x02);
                     }
                 }
-                GamePatches.Apply(writer, HighResolutionCheckBox.Checked, (scrollSpeed.SelectedIndex + 1) * 20);
+                GamePatches.Apply(writer, HighResolutionCheckBox.Checked, ScrollRates[scrollSpeed.SelectedIndex]);
             }
         }
     }

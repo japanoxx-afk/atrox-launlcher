@@ -32,15 +32,15 @@ $patches = $assembly.GetType('AtroxLauncher.GamePatches', $true)
 $code = [byte[]]$patches.GetMethod('BuildHudClear', $flags).Invoke($null, $null)
 if ($code.Length -gt 176 -or $code[0] -ne 0x9c -or $code[1] -ne 0x60) { throw 'HUD trampoline exceeds padding or does not save state.' }
 $fixture = New-Object byte[] 0x64000
-([byte[]]@(0x8d,0x04,0x80)).CopyTo($fixture, 0x2d39a)
-([byte[]]@(0x8d,0x0c,0x80)).CopyTo($fixture, 0x2d3ad)
+([byte[]]@(0x8b,0x4c,0x24,0x18,0x56,0xe8,0xfd,0x9d,0xfd,0xff)).CopyTo($fixture, 0x2d473)
+for ($index=0x2d2b0; $index -lt 0x2d330; $index++) { $fixture[$index]=0xcc }
 ([byte[]]@(0x8b,0x0d,0x30,0x77,0xb2,0)).CopyTo($fixture, 0x63209)
 for ($index=0x63610; $index -lt 0x636c0; $index++) { $fixture[$index]=0xcc }
 $stream = New-Object IO.MemoryStream(,$fixture)
 $writer = New-Object IO.BinaryWriter($stream)
 $apply = $patches.GetMethod('Apply', $flags)
 $apply.Invoke($null, [object[]]@([IO.BinaryWriter]$writer, $true, [int]40))
-if ($fixture[0x2d39c] -ne 2 -or $fixture[0x2d3af] -ne 2) { throw 'Scroll axes differ or default speed is wrong.' }
+if (0x2d473 + 5 + [BitConverter]::ToInt32($fixture, 0x2d474) -ne 0x2d2b0) { throw 'Scroll convergence hook missing.' }
 if ($fixture[0x63209] -ne 0xe9) { throw 'HUD draw hook missing.' }
 if (0x63209 + 5 + [BitConverter]::ToInt32($fixture, 0x6320a) -ne 0x63610) { throw 'HUD hook jumps to wrong address.' }
 if (0x63610 + $code.Length + [BitConverter]::ToInt32($code, $code.Length-4) -ne 0x6320f) { throw 'HUD trampoline does not resume before UI draw.' }
@@ -48,7 +48,14 @@ try { $apply.Invoke($null, [object[]]@([IO.BinaryWriter]$writer, $true, [int]40)
 catch { if ($_.Exception -isnot [IO.InvalidDataException] -and $_.Exception.InnerException -isnot [IO.InvalidDataException]) { throw } }
 $writer.Dispose()
 Write-Host 'Native HUD and scroll patch verification passed.'
-if ($env:ATROX_EXPORT_PATCH) { [IO.File]::WriteAllBytes($env:ATROX_EXPORT_PATCH, $code) }
+if ($env:ATROX_EXPORT_PATCH) {
+    [IO.File]::WriteAllBytes($env:ATROX_EXPORT_PATCH, $code)
+    foreach ($rate in @(5,10,20,40,60,80,100)) {
+        $scrollCode = [byte[]]$patches.GetMethod('BuildScroll', $flags).Invoke($null, [object[]]@([int]$rate))
+        if ($scrollCode.Length -gt 128) { throw 'Scroll code exceeds padding.' }
+        [IO.File]::WriteAllBytes((Join-Path (Split-Path $env:ATROX_EXPORT_PATCH) "scroll-$rate.bin"), $scrollCode)
+    }
+}
 
 
 
@@ -65,7 +72,7 @@ $install.Invoke($null, [object[]]@([string]$testDirectory, $true))
 if ((Get-FileHash $oldDll).Hash.ToLowerInvariant() -ne $renderer.GetField('RendererHash', $flags).GetRawConstantValue()) { throw 'Renderer resource checksum failed.' }
 if ((Get-Content "$oldDll.before-launcher-$oldHash" -Raw) -ne 'previous user renderer') { throw 'Previous renderer was not preserved.' }
 $settings = Get-Content $ini -Raw
-if ($settings -notmatch 'Keep=unchanged' -or $settings -notmatch 'fullscreen=false' -or $settings -notmatch 'toggle_borderless=true') { throw 'Windowed settings or user preservation failed.' }
+if ($settings -notmatch 'maintas=false' -or $settings -notmatch 'boxing=false' -or $settings -notmatch 'Keep=unchanged' -or $settings -notmatch 'fullscreen=false' -or $settings -notmatch 'toggle_borderless=true') { throw 'Windowed settings or user preservation failed.' }
 $install.Invoke($null, [object[]]@([string]$testDirectory, $false))
 if ((Get-Content $ini -Raw) -notmatch 'fullscreen=true') { throw 'Initial fullscreen setting failed.' }
 if (!(Test-Path (Join-Path $testDirectory 'cnc-ddraw-LICENSE.txt'))) { throw 'Renderer license was not installed.' }
