@@ -98,11 +98,60 @@ namespace AtroxLauncher
         internal static void StartApply(string stagedPath)
         {
             // The helper is a copy of THIS version, so downloaded code is not run before installation.
-            var helper = Path.Combine(Path.GetDirectoryName(stagedPath), "ApplyUpdate.exe");
+            var directory = Path.Combine(Path.GetTempPath(), "AtroxLauncherApply-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directory);
+            var helper = Path.Combine(directory, "ApplyUpdate.exe");
             File.Copy(Assembly.GetExecutingAssembly().Location, helper);
             System.Diagnostics.Process.Start(new ProcessStartInfo(helper, "--apply-update " + System.Diagnostics.Process.GetCurrentProcess().Id + " " + Quote(stagedPath) + " " + Quote(Assembly.GetExecutingAssembly().Location)) { UseShellExecute = false });
         }
         internal static string Quote(string value) { return "\"" + value + "\""; }
+        internal static string VersionedPath(string target, Version version)
+        {
+            var normalized = NormalizeVersion(version);
+            var display = normalized.Revision == 0 ? normalized.ToString(3) : normalized.ToString(4);
+            return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(target)), "AtroxLauncher_v" + display + ".exe");
+        }
+        internal static bool EnsureVersionedName()
+        {
+            var current = Assembly.GetExecutingAssembly().Location;
+            if (string.Equals(current, VersionedPath(current, CurrentVersion), StringComparison.OrdinalIgnoreCase)) return false;
+            // Old update helpers preserve the old filename. Let the newly installed
+            // version perform the migration too, so existing launchers can upgrade.
+            var directory = Path.Combine(Path.GetTempPath(), "AtroxLauncherRename-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(directory);
+                var staged = Path.Combine(directory, "AtroxLauncher.exe");
+                File.Copy(current, staged);
+                StartApply(staged);
+                return true;
+            }
+            catch (IOException) { return false; }
+            catch (UnauthorizedAccessException) { return false; }
+        }
+        internal static string ReplaceAndRename(string staged, string original)
+        {
+            var target = VersionedPath(original, AssemblyName.GetAssemblyName(staged).Version);
+            if (!string.Equals(target, original, StringComparison.OrdinalIgnoreCase) && File.Exists(target))
+            {
+                if (!string.Equals(Sha256(target), Sha256(staged), StringComparison.OrdinalIgnoreCase))
+                    throw new IOException("새 버전의 이름을 가진 다른 파일이 이미 있습니다: " + target);
+                File.Copy(original, original + ".previous", true);
+                return target;
+            }
+            File.Copy(staged, original + ".next", true);
+            File.Replace(original + ".next", original, original + ".previous", true);
+            try
+            {
+                if (!string.Equals(target, original, StringComparison.OrdinalIgnoreCase)) File.Move(original, target);
+            }
+            catch
+            {
+                File.Replace(original + ".previous", original, null, true);
+                throw;
+            }
+            return target;
+        }
         internal static void CleanupPrevious(string target)
         {
             var backup = Path.GetFullPath(target) + ".previous";
@@ -124,18 +173,36 @@ namespace AtroxLauncher
             var target = Path.GetFullPath(args[3]);
             var staged = Path.GetFullPath(args[2]);
             var backup = target + ".previous";
+            string renamed = null;
             try
             {
                 try { using (var parent = System.Diagnostics.Process.GetProcessById(int.Parse(args[1]))) if (!parent.WaitForExit(30000)) throw new IOException("기존 런처가 종료되지 않았습니다."); }
                 catch (ArgumentException) { }
-                // Stage on the destination volume for an atomic File.Replace operation.
-                var next = target + ".next";
-                File.Copy(staged, next, true);
-                File.Replace(next, target, backup, true);
-                try { System.Diagnostics.Process.Start(new ProcessStartInfo(target) { WorkingDirectory = Path.GetDirectoryName(target) }); }
-                catch { File.Replace(backup, target, null, true); throw; }
+                renamed = ReplaceAndRename(staged, target);
+                using (var launched = System.Diagnostics.Process.Start(new ProcessStartInfo(renamed) { WorkingDirectory = Path.GetDirectoryName(renamed) }))
+                {
+                    if (launched == null || !launched.WaitForInputIdle(30000) || launched.HasExited)
+                        throw new IOException("새 런처가 정상적으로 시작되지 않았습니다.");
+                }
+                if (!string.Equals(renamed, target, StringComparison.OrdinalIgnoreCase) && File.Exists(target)) File.Delete(target);
+                CleanupPrevious(target);
             }
-            catch (Exception e) { System.Windows.Forms.MessageBox.Show("업데이트 적용 실패: " + e.Message + "\n백업: " + backup, "런처 업데이트"); }
+            catch (Exception e)
+            {
+                // Restore only when this helper completed replacement; collision
+                // failures must not consume a backup from an earlier update.
+                if (renamed != null && File.Exists(backup))
+                {
+                    try
+                    {
+                        if (File.Exists(target)) File.Replace(backup, target, null, true);
+                        else File.Move(backup, target);
+                    }
+                    catch (IOException) { }
+                    catch (UnauthorizedAccessException) { }
+                }
+                System.Windows.Forms.MessageBox.Show("업데이트 적용 실패: " + e.Message + "\n백업: " + backup, "런처 업데이트");
+            }
         }
     }
 }

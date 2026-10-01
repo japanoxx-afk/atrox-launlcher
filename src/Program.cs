@@ -15,6 +15,7 @@ namespace AtroxLauncher
         internal static void Run(string[] args)
         {
             if (args.Length == 4 && args[0] == "--apply-update") { LauncherUpdate.Apply(args); return; }
+            if (LauncherUpdate.EnsureVersionedName()) return;
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new MainForm());

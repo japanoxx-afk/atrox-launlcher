@@ -7,6 +7,28 @@ $ErrorActionPreference = 'Stop'
 $exe = Join-Path $PSScriptRoot '..\dist\AtroxLauncher.exe'
 $assembly = [Reflection.Assembly]::LoadFile((Resolve-Path $exe).Path)
 $flags = [Reflection.BindingFlags]'Static,NonPublic'
+$updateType = $assembly.GetType('AtroxLauncher.LauncherUpdate', $true)
+$versionedPath = $updateType.GetMethod('VersionedPath', $flags)
+$replaceAndRename = $updateType.GetMethod('ReplaceAndRename', $flags)
+$renameDirectory = Join-Path ([IO.Path]::GetTempPath()) ('AtroxRenameVerify-' + [Guid]::NewGuid().ToString('N'))
+[IO.Directory]::CreateDirectory($renameDirectory) | Out-Null
+$renameOriginal = Join-Path $renameDirectory 'AtroxLauncher_v1.5.0.exe'
+$renameExpected = Join-Path $renameDirectory ('AtroxLauncher_v' + $assembly.GetName().Version.ToString(3) + '.exe')
+if ($versionedPath.Invoke($null, [object[]]@([string]$renameOriginal, [Version]'1.6.2.1')) -ne (Join-Path $renameDirectory 'AtroxLauncher_v1.6.2.1.exe')) { throw 'Revision was lost from filename.' }
+[IO.File]::Copy((Resolve-Path $exe).Path, $renameOriginal)
+$renamed = $replaceAndRename.Invoke($null, [object[]]@([string](Resolve-Path $exe).Path, [string]$renameOriginal))
+if ($renamed -ne $renameExpected -or !(Test-Path $renameExpected) -or (Test-Path $renameOriginal) -or !(Test-Path ($renameOriginal + '.previous'))) { throw 'Versioned rename or rollback backup failed.' }
+[IO.File]::Copy((Resolve-Path $exe).Path, $renameOriginal)
+$reused = $replaceAndRename.Invoke($null, [object[]]@([string](Resolve-Path $exe).Path, [string]$renameOriginal))
+if ($reused -ne $renameExpected) { throw 'Identical existing release was not reused.' }
+[IO.File]::WriteAllText($renameExpected, 'different file must be preserved')
+$collisionBlocked = $false
+try { $replaceAndRename.Invoke($null, [object[]]@([string](Resolve-Path $exe).Path, [string]$renameOriginal)) } catch { $collisionBlocked = $true }
+if (!$collisionBlocked -or (Get-Content $renameExpected -Raw) -ne 'different file must be preserved' -or !(Test-Path $renameOriginal)) { throw 'Filename collision was not safely blocked.' }
+[IO.File]::Delete($renameExpected)
+[IO.File]::Delete($renameOriginal)
+[IO.File]::Delete($renameOriginal + '.previous')
+[IO.Directory]::Delete($renameDirectory)
 $cleanupPrevious = $assembly.GetType('AtroxLauncher.LauncherUpdate', $true).GetMethod('CleanupPrevious', $flags)
 $cleanupTarget = Join-Path ([IO.Path]::GetTempPath()) ('AtroxUpdateCleanup-' + [Guid]::NewGuid().ToString('N') + '.exe')
 $cleanupBackup = $cleanupTarget + '.previous'
