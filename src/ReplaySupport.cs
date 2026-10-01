@@ -64,6 +64,39 @@ namespace AtroxLauncher
             }
             writer.Seek(name, SeekOrigin.Begin); writer.Write(Encoding.ASCII.GetBytes(".\\AtroxReplay.dll\0"));
             writer.Seek(function, SeekOrigin.Begin); writer.Write(Encoding.ASCII.GetBytes("ReplayEvent\0"));
+            ApplySavedGame(writer, name);
+        }
+        static void ApplySavedGame(BinaryWriter writer, int name)
+        {
+            const int site = 0x8b473, start = Cave + 1536, function = Cave + 1980;
+            byte[] original = {0x8b,0x0d,0x08,0x77,0xb2,0};
+            Expect(writer, site, original);
+            var code = new List<byte>();
+            Action<byte[]> emit = bytes => code.AddRange(bytes);
+            Action<int> num = n => code.AddRange(BitConverter.GetBytes(n));
+            Action<int> api = n => { emit(new byte[] {0xff,0x15}); num(n); };
+            emit(new byte[] {0x9c,0x60,0x68}); num(0x400000 + name + 2); api(0xe66e58);
+            emit(new byte[] {0x85,0xc0,0x75,11,0x68}); num(0x400000 + name); api(0xe66e64);
+            emit(new byte[] {0x85,0xc0,0x74,0}); int missing = code.Count - 1;
+            code.Add(0x68); num(0x400000 + function); code.Add(0x50); api(0xe66e68);
+            emit(new byte[] {0x85,0xc0,0x74,2,0xff,0xd0});
+            code[missing] = (byte)(code.Count - missing - 1);
+            emit(new byte[] {0x61,0x9d}); emit(original);
+            code.Add(0xe9); num(site + original.Length - (start + code.Count + 4));
+            writer.Seek(start, SeekOrigin.Begin); writer.Write(code.ToArray());
+            writer.Seek(site, SeekOrigin.Begin); writer.Write((byte)0xe9); writer.Write(start - site - 5); writer.Write((byte)0x90);
+            writer.Seek(function, SeekOrigin.Begin); writer.Write(Encoding.ASCII.GetBytes("PrepareSavedMap\0"));
+
+            // Failed initialization can dispose a zero-initialized UI container.
+            // Native ClearChildren expects its first index to be -1, not zero.
+            const int clear = 0x18730, guard = Cave + 1664;
+            byte[] prologue = {0x56,0x57,0x8b,0xf9,0x0f,0xbf,0x77,0x3e};
+            Expect(writer, clear, prologue);
+            code.Clear();
+            emit(new byte[] {0x85,0xc9,0x74,13,0x66,0x83,0x79,0x3e,0,0x75,9,0x83,0x79,0x68,0,0x75,3,0xb0,1,0xc3});
+            emit(prologue); code.Add(0xe9); num(clear + prologue.Length - (guard + code.Count + 4));
+            writer.Seek(guard, SeekOrigin.Begin); writer.Write(code.ToArray());
+            writer.Seek(clear, SeekOrigin.Begin); writer.Write((byte)0xe9); writer.Write(guard - clear - 5); writer.Write(new byte[] {0x90,0x90,0x90});
         }
         static void Expect(BinaryWriter writer, int offset, byte[] expected)
         {

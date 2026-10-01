@@ -1,4 +1,6 @@
 LIBRARY AtroxReplay
 EXPORTS
+    PrepareSavedMap=_PrepareSavedMap@0
+    GameplayEvent
     ReplayEvent=_ReplayEvent@4
     ConstructionEvent=_ConstructionEvent@8

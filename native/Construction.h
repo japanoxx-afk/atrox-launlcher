@@ -9,28 +9,30 @@ BYTE* Entity(DWORD id) {
     auto registry = *reinterpret_cast<BYTE**>(0xb27700);
     return registry ? Field<BYTE**>(registry, 8)[id] : nullptr;
 }
-bool HasRule(HANDLE stream) {
+bool HasMarker(HANDLE stream, const char* value, size_t length) {
     LARGE_INTEGER current = {}, zero = {}, end = {};
     if (stream == INVALID_HANDLE_VALUE || !SetFilePointerEx(stream, zero, &current, FILE_CURRENT) ||
-        !GetFileSizeEx(stream, &end) || end.QuadPart < sizeof(ReplayRule)) return false;
-    end.QuadPart -= sizeof(ReplayRule);
-    char marker[sizeof(ReplayRule)] = {}; DWORD count = 0;
+        !GetFileSizeEx(stream, &end) || end.QuadPart < static_cast<LONGLONG>(length)) return false;
+    DWORD bytes = static_cast<DWORD>(std::min<LONGLONG>(128, end.QuadPart));
+    end.QuadPart -= bytes;
+    char marker[128] = {}; DWORD count = 0;
     const bool found = SetFilePointerEx(stream, end, nullptr, FILE_BEGIN) &&
-        ReadFile(stream, marker, sizeof(marker), &count, nullptr) && count == sizeof(marker) &&
-        !memcmp(marker, ReplayRule, sizeof(marker));
+        ReadFile(stream, marker, bytes, &count, nullptr) && count == bytes &&
+        std::search(marker, marker + bytes, value, value + length) != marker + bytes;
     SetFilePointerEx(stream, current, nullptr, FILE_BEGIN);
     return found;
 }
+bool HasRule(HANDLE stream) { return HasMarker(stream, ReplayRule, sizeof(ReplayRule)); }
 bool Enabled() {
     return *reinterpret_cast<int*>(0xb1e8e8) == -1 || HasRule(*reinterpret_cast<HANDLE*>(0xb2687c));
 }
-void MarkRecording() {
+void MarkRecording(const char* marker = ReplayRule, size_t length = sizeof(ReplayRule)) {
     if (*reinterpret_cast<int*>(0xb1e8e8) != -1) return;
     HANDLE stream = *reinterpret_cast<HANDLE*>(0xb2687c);
-    if (stream == INVALID_HANDLE_VALUE || HasRule(stream)) return;
+    if (stream == INVALID_HANDLE_VALUE || HasMarker(stream, marker, length)) return;
     LARGE_INTEGER current = {}, zero = {};
     if (!SetFilePointerEx(stream, zero, &current, FILE_CURRENT)) return;
-    if (SetFilePointerEx(stream, zero, nullptr, FILE_END)) replay::Write(stream, ReplayRule, sizeof(ReplayRule));
+    if (SetFilePointerEx(stream, zero, nullptr, FILE_END)) replay::Write(stream, marker, static_cast<DWORD>(length));
     SetFilePointerEx(stream, current, nullptr, FILE_BEGIN);
 }
 void Complete(BYTE* building) {
@@ -78,5 +80,5 @@ void Tick() {
 extern "C" __declspec(dllexport) void __stdcall ConstructionEvent(DWORD event, BYTE* entity) {
     if (event == 0) construction::Complete(entity);
     else if (event == 1) construction::Tick();
-    else if (event == 2) construction::pending.clear();
+    else if (event == 2) { construction::pending.clear(); gameplay::Reset(); }
 }

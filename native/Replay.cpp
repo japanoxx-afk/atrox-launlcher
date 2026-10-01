@@ -151,7 +151,10 @@ bool Save(HANDLE recording, const std::vector<BYTE>& header, const std::wstring&
 }
 
 #ifndef REPLAY_TEST
+namespace gameplay { void Reset(); }
 #include "Construction.h"
+#include "Gameplay.h"
+#include "SavedMap.h"
 namespace {
 replay::Vision vision;
 std::wstring GameDirectory() {
@@ -201,7 +204,12 @@ void AutoSave() {
 }
 }
 extern "C" __declspec(dllexport) void __stdcall ReplayEvent(DWORD event) {
-    if (event == 0) { construction::MarkRecording(); AutoSave(); return; }
+    if (event == 0) {
+        construction::MarkRecording();
+        construction::MarkRecording(gameplay::ReplayRule, sizeof(gameplay::ReplayRule));
+        construction::MarkRecording(gameplay::SelectionRule, sizeof(gameplay::SelectionRule));
+        AutoSave(); return;
+    }
     if (event == 2) { vision.End(); return; }
     BYTE* players[8] = {};
     const bool playback = *reinterpret_cast<int*>(0xb1e8e8) != -1;
