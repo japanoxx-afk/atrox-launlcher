@@ -1,0 +1,9 @@
+bin/
+obj/
+packages/
+*.user
+.vs/
+dist/
+artifacts/
+__pycache__/
+Config.json
