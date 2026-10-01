@@ -1,0 +1,3 @@
+LIBRARY AtroxReplay
+EXPORTS
+    ReplayEvent=_ReplayEvent@4

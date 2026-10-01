@@ -26,7 +26,7 @@ namespace AtroxLauncher
             Font = new Font("맑은 고딕", 9F);
             BackColor = Color.FromArgb(17, 23, 32);
             ForeColor = Color.FromArgb(229, 236, 244);
-            ClientSize = new Size(640, 510);
+            ClientSize = new Size(640, 620);
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
@@ -67,22 +67,34 @@ namespace AtroxLauncher
             options.Controls.Add(scrollSpeed);
             options.TabIndex = 2;
 
-            CustomPakCheckBox = Option("사용자 정의 JPak 사용", 28, 345, this);
+            var replayPanel = new Panel { Location = new Point(28, 340), Size = new Size(584, 98), BackColor = Color.FromArgb(26, 35, 47), TabIndex = 3 };
+            Controls.Add(replayPanel);
+            autoReplay.SetBounds(18, 12, 265, 28);
+            replayPanel.Controls.Add(autoReplay);
+            replayPanel.Controls.Add(new Label { Text = "최대", Location = new Point(300, 17), Size = new Size(45, 24) });
+            replayMaximum.SetBounds(347, 13, 92, 28);
+            replayMaximum.BackColor = Color.FromArgb(39, 51, 66);
+            replayMaximum.ForeColor = ForeColor;
+            replayPanel.Controls.Add(replayMaximum);
+            replayPanel.Controls.Add(new Label { Text = "개 보관", Location = new Point(450, 17), Size = new Size(95, 24) });
+            replayPanel.Controls.Add(new Label { Text = "경기 종료 시 저장 · 오래된 자동 저장 파일부터 정리\n수동 저장 파일은 유지 · 리플레이는 양쪽 시야로 재생", Location = new Point(18, 49), Size = new Size(548, 43), ForeColor = muted });
+
+            CustomPakCheckBox = Option("사용자 정의 JPak 사용", 28, 455, this);
             CustomPakCheckBox.Checked = false;
             CustomPakCheckBox.TabIndex = 3;
-            JPakPathTextBox = PathField("C:\\Program Files\\Joymax\\AtroxLauncher\\Atrox.jpak", 28, 380, 480);
+            JPakPathTextBox = PathField("C:\\Program Files\\Joymax\\AtroxLauncher\\Atrox.jpak", 28, 490, 480);
             JPakPathTextBox.TabIndex = 4;
             JPakPathTextBox.TextChanged += WriteConfig;
-            JPakPathButton = ActionButton("찾아보기", 520, 377, 92, 32);
+            JPakPathButton = ActionButton("찾아보기", 520, 487, 92, 32);
             JPakPathButton.TabIndex = 5;
             JPakPathButton.Click += JPakPathButton_Click;
 
-            LinkLabel = new LinkLabel { Text = "아트록스 카페 바로가기", Location = new Point(28, 424), Size = new Size(270, 22), LinkColor = muted, ActiveLinkColor = accent, VisitedLinkColor = muted, TabIndex = 6 };
+            LinkLabel = new LinkLabel { Text = "아트록스 카페 바로가기", Location = new Point(28, 534), Size = new Size(270, 22), LinkColor = muted, ActiveLinkColor = accent, VisitedLinkColor = muted, TabIndex = 6 };
             LinkLabel.LinkClicked += LinkLabel_LinkClicked;
             Controls.Add(LinkLabel);
-            updateButton = ActionButton("런처 업데이트", 28, 458, 190, 36);
+            updateButton = ActionButton("런처 업데이트", 28, 568, 190, 36);
             updateButton.TabIndex = 7;
-            RunButton = ActionButton("게임 시작  →", 238, 452, 374, 42);
+            RunButton = ActionButton("게임 시작  →", 238, 562, 374, 42);
             RunButton.BackColor = accent;
             RunButton.ForeColor = Color.FromArgb(12, 34, 34);
             RunButton.Font = new Font(Font, FontStyle.Bold);

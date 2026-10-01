@@ -1,4 +1,4 @@
-﻿param([string]$Version = '1.3.7.0')
+﻿param([string]$Version = '1.4.1.0')
 $ErrorActionPreference = 'Stop'
 $repoRoot = $PSScriptRoot
 $msbuild = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe'
@@ -6,6 +6,11 @@ if (!(Test-Path -LiteralPath $msbuild)) {
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
     $msbuild = & $vswhere -latest -products '*' -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
 }
+$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+$vsRoot = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+if (!$vsRoot) { throw 'Visual Studio C++ x86 build tools are required for replay support.' }
+& (Join-Path $repoRoot 'native\build.cmd') $vsRoot
+if ($LASTEXITCODE -ne 0) { throw 'Replay module build or tests failed' }
 $packageDll = Join-Path $repoRoot 'packages\Newtonsoft.Json.12.0.2\lib\net45\Newtonsoft.Json.dll'
 if (!(Test-Path -LiteralPath $packageDll)) {
     $cache = Join-Path $repoRoot 'packages'

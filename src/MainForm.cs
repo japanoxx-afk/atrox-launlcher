@@ -27,6 +27,8 @@ namespace AtroxLauncher
         string LinkLabelLink = "https://cafe.naver.com/atroxs";
         bool isInit;
         static readonly int[] ScrollRates = { 5, 10, 20, 40, 60, 80, 100 };
+        readonly CheckBox autoReplay = new CheckBox { Text = "리플레이 자동 저장", Checked = true };
+        readonly NumericUpDown replayMaximum = new NumericUpDown { Minimum = 1, Maximum = 1000, Value = 20 };
         readonly ComboBox scrollSpeed = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
 
         public MainForm()
@@ -35,6 +37,8 @@ namespace AtroxLauncher
             scrollSpeed.Items.AddRange(new object[] { "5% (아주 느림)", "10% (권장)", "20%", "40%", "60%", "80%", "100% (기존)" });
             scrollSpeed.SelectedIndex = 1;
             scrollSpeed.SelectedIndexChanged += WriteConfig;
+            autoReplay.CheckedChanged += (sender, args) => { replayMaximum.Enabled = autoReplay.Checked; WriteConfig(); };
+            replayMaximum.ValueChanged += WriteConfig;
             Text = "AtroxLauncher v" + LauncherUpdate.CurrentVersion.ToString(3);
             updateButton.Click += async (sender, args) => {
                 updateButton.Enabled = false;
@@ -67,6 +71,9 @@ namespace AtroxLauncher
 
             var jObject = JObject.Parse(File.ReadAllText(configSource));
             var configDirectory = Path.GetDirectoryName(configSource);
+            autoReplay.Checked = (bool?)jObject["AutoSaveReplay"] ?? true;
+            replayMaximum.Value = Math.Max(1, Math.Min(1000, (int?)jObject["ReplayMaximum"] ?? 20));
+            replayMaximum.Enabled = autoReplay.Checked;
             // Reset legacy speed settings once: the old patch missed an input path.
             var speed = (int?)jObject["ScrollSpeedRevision"] == 2 ? (int?)jObject["ScrollSpeedPercent"] ?? 10 : 10;
             var speedIndex = Array.IndexOf(ScrollRates, speed);
@@ -108,6 +115,8 @@ namespace AtroxLauncher
                 { "JPakPath", JPakPath },
                 { "ScrollSpeedPercent", ScrollRates[scrollSpeed.SelectedIndex] },
                 { "ScrollSpeedRevision", 2 },
+                { "AutoSaveReplay", autoReplay.Checked },
+                { "ReplayMaximum", (int)replayMaximum.Value },
                 { "Hyperlink", new JArray{ LinkLabel.Text, LinkLabelLink } },
                 // { "NoCD", new JArray{ NoCdCheckBox.Enabled.ToString(), NoCdCheckBox.CheckState.ToString() } },
                 { "WindowMode", new JArray{ WindowModeCheckBox.Enabled.ToString(), WindowModeCheckBox.CheckState.ToString() } },
@@ -178,6 +187,7 @@ namespace AtroxLauncher
                 File.Copy(template, AtroxPath, true);
                 PatchAtrox();
                 GameRenderer.Install(gameDirectory, WindowModeCheckBox.Checked);
+                ReplaySupport.Install(gameDirectory, autoReplay.Checked, (int)replayMaximum.Value);
                 var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Path.GetFullPath(AtroxPath)) { WorkingDirectory = gameDirectory });
                 if (process == null) throw new IOException("게임 프로세스를 시작하지 못했습니다.");
             }
@@ -222,6 +232,7 @@ namespace AtroxLauncher
             using (var stream = File.Open(AtroxPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
             using (var writer = new BinaryWriter(stream))
             {
+                ReplaySupport.Apply(writer);
                 if (NoCdCheckBox.CheckState == CheckState.Checked)
                 {
                     writer.Seek(0x000D6AC7, SeekOrigin.Begin);
