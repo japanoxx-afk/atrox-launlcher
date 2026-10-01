@@ -1,4 +1,4 @@
-﻿if ([IntPtr]::Size -ne 4) {
+if ([IntPtr]::Size -ne 4) {
     & "$env:WINDIR\SysWOW64\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath
     if ($LASTEXITCODE -ne 0) { throw '32-bit launcher verification failed.' }
     exit 0
@@ -7,6 +7,16 @@ $ErrorActionPreference = 'Stop'
 $exe = Join-Path $PSScriptRoot '..\dist\AtroxLauncher.exe'
 $assembly = [Reflection.Assembly]::LoadFile((Resolve-Path $exe).Path)
 $flags = [Reflection.BindingFlags]'Static,NonPublic'
+$cleanupPrevious = $assembly.GetType('AtroxLauncher.LauncherUpdate', $true).GetMethod('CleanupPrevious', $flags)
+$cleanupTarget = Join-Path ([IO.Path]::GetTempPath()) ('AtroxUpdateCleanup-' + [Guid]::NewGuid().ToString('N') + '.exe')
+$cleanupBackup = $cleanupTarget + '.previous'
+[IO.File]::Copy((Resolve-Path $exe).Path, $cleanupBackup)
+$cleanupPrevious.Invoke($null, [object[]]@([string]$cleanupTarget))
+if (Test-Path $cleanupBackup) { throw 'Validated launcher backup was not cleaned up.' }
+[IO.File]::WriteAllText($cleanupBackup, 'unrelated data must be preserved')
+$cleanupPrevious.Invoke($null, [object[]]@([string]$cleanupTarget))
+if (!(Test-Path $cleanupBackup)) { throw 'Unrecognized backup was removed.' }
+[IO.File]::Delete($cleanupBackup)
 $normalizeVersion = $assembly.GetType('AtroxLauncher.LauncherUpdate', $true).GetMethod('NormalizeVersion', $flags)
 foreach ($inputVersion in @('1.6', '1.6.0', '1.6.0.0')) {
     if ($normalizeVersion.Invoke($null, [object[]]@([Version]$inputVersion)) -ne [Version]'1.6.0.0') {

@@ -103,6 +103,22 @@ namespace AtroxLauncher
             System.Diagnostics.Process.Start(new ProcessStartInfo(helper, "--apply-update " + System.Diagnostics.Process.GetCurrentProcess().Id + " " + Quote(stagedPath) + " " + Quote(Assembly.GetExecutingAssembly().Location)) { UseShellExecute = false });
         }
         internal static string Quote(string value) { return "\"" + value + "\""; }
+        internal static void CleanupPrevious(string target)
+        {
+            var backup = Path.GetFullPath(target) + ".previous";
+            try
+            {
+                if (!File.Exists(backup)) return;
+                var previous = AssemblyName.GetAssemblyName(backup);
+                var current = Assembly.GetExecutingAssembly().GetName();
+                if (previous.Name == current.Name && NormalizeVersion(previous.Version) <= NormalizeVersion(current.Version))
+                    File.Delete(backup);
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            catch (BadImageFormatException) { }
+            // Locked backups are retried on the next successful launch.
+        }
         internal static void Apply(string[] args)
         {
             var target = Path.GetFullPath(args[3]);
