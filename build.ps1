@@ -1,4 +1,4 @@
-param([string]$Version = '1.3.0.0')
+param([string]$Version = '1.3.1.0')
 $ErrorActionPreference = 'Stop'
 $repoRoot = $PSScriptRoot
 $msbuild = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe'
@@ -14,7 +14,7 @@ if (!(Test-Path -LiteralPath $packageDll)) {
     Invoke-WebRequest 'https://api.nuget.org/v3-flatcontainer/newtonsoft.json/12.0.2/newtonsoft.json.12.0.2.nupkg' -OutFile $download
     Expand-Archive -LiteralPath $download -DestinationPath (Join-Path $cache 'Newtonsoft.Json.12.0.2') -Force
 }
-$arguments = @((Join-Path $repoRoot 'src\AtroxLauncher.csproj'), '/p:Configuration=Release', '/verbosity:minimal', '/nologo')
+$arguments = @((Join-Path $repoRoot 'src\AtroxLauncher.csproj'), '/p:Configuration=Release', '/p:OutputPath=bin\Package\', '/verbosity:minimal', '/nologo')
 # A .NET Framework runtime is sufficient on this host. CI uses installed targeting assemblies.
 if (!(Test-Path "${env:ProgramFiles(x86)}\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.7.2")) {
     $arguments += '/p:FrameworkPathOverride=C:\Windows\Microsoft.NET\Framework\v4.0.30319'
@@ -23,9 +23,10 @@ if (!(Test-Path "${env:ProgramFiles(x86)}\Reference Assemblies\Microsoft\Framewo
 if ($LASTEXITCODE -ne 0) { throw 'Launcher build failed' }
 $destination = Join-Path $repoRoot 'dist'
 New-Item -ItemType Directory -Force $destination | Out-Null
-Copy-Item -LiteralPath (Join-Path $repoRoot 'src\bin\Release\AtroxLauncher.exe') -Destination $destination -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot 'src\bin\Package\AtroxLauncher.exe') -Destination $destination -Force
 $exePath = Join-Path $destination 'AtroxLauncher.exe'
 $actualVersion = [Reflection.AssemblyName]::GetAssemblyName($exePath).Version.ToString()
 if ($actualVersion -ne $Version) { throw "Expected $Version, built $actualVersion. Update AssemblyInfo.cs first." }
 (Get-FileHash -LiteralPath $exePath -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content (Join-Path $destination 'AtroxLauncher.exe.sha256') -Encoding ascii
 Write-Host "Built $exePath ($actualVersion)"
+

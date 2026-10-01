@@ -106,6 +106,7 @@
     </Compile>
     <Compile Include="Program.cs" />
     <Compile Include="LauncherUpdate.cs" />
+    <Compile Include="GameFiles.cs" />
     <Compile Include="Bootstrap.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <EmbeddedResource Include="MainForm.resx">

@@ -23,7 +23,8 @@ namespace AtroxLauncher
         }
         string JPakPathExtractPath => $@"{AtroxFolderPath}\atrox_pak";
 
-        string ScenarioFolderPath => "CustomScenario";
+        readonly string scenarioDirectory = Path.Combine(Path.GetDirectoryName(GameFiles.ConfigSource), "CustomScenario");
+        string ScenarioFolderPath => scenarioDirectory;
         string ConfigPath => "Config.json";
         string LinkLabelLink = "https://cafe.naver.com/atroxs";
         bool isInit;
@@ -64,16 +65,18 @@ namespace AtroxLauncher
 
         void ReadConfig()
         {
-            if (!File.Exists(ConfigPath))
+            var configSource = GameFiles.ConfigSource;
+            if (!File.Exists(configSource))
             {
                 isInit = true;
                 return;
             }
 
-            var jObject = JObject.Parse(string.Join(string.Empty, File.ReadAllLines(ConfigPath).Select(t => t)));
+            var jObject = JObject.Parse(File.ReadAllText(configSource));
+            var configDirectory = Path.GetDirectoryName(configSource);
 
-            AtroxFolderPath = jObject["AtroxFolderPath"].ToString();
-            JPakPath = jObject["JPakPath"].ToString();
+            AtroxFolderPath = GameFiles.ResolvePath(jObject["AtroxFolderPath"].ToString(), configDirectory);
+            JPakPath = GameFiles.ResolvePath(jObject["JPakPath"].ToString(), configDirectory);
 
             var target = jObject["CustomScenario"].ToString();
             foreach (var item in ScenarioListBox.Items)
@@ -184,9 +187,8 @@ namespace AtroxLauncher
                     throw new IOException("게임이 이미 실행 중입니다. 종료한 후 실행해 주세요.");
                 var gameDirectory = Path.GetFullPath(AtroxFolderPath);
                 if (!Directory.Exists(gameDirectory)) throw new DirectoryNotFoundException("게임 경로를 확인해 주세요.");
-                if (!File.Exists("Atrox.ex_")) throw new FileNotFoundException("기존 런처 폴더의 Atrox.ex_ 파일이 필요합니다.");
-                if (LauncherUpdate.Sha256("Atrox.ex_") != "b9561ed32e1c5f4275862b5b2afda5425fd4600735a1179ffbdf9b5ac603d6f5")
-                    throw new InvalidDataException("지원하지 않는 게임 원본입니다. 잘못된 주소에 패치하지 않도록 실행을 중단했습니다.");
+                var template = GameFiles.FindTemplate(gameDirectory);
+                if (template == null) return;
                 if (CustomPakCheckBox.Checked)
                 {
                     if (!File.Exists(JPakPath)) throw new FileNotFoundException("JPak 경로를 확인해 주세요.");
@@ -196,7 +198,7 @@ namespace AtroxLauncher
                 }
                 // Keep the user's previous executable; always patch a fresh supported template.
                 if (File.Exists(AtroxPath) && !File.Exists(AtroxPath + ".original")) File.Copy(AtroxPath, AtroxPath + ".original");
-                File.Copy("Atrox.ex_", AtroxPath, true);
+                File.Copy(template, AtroxPath, true);
                 PatchAtrox();
                 var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Path.GetFullPath(AtroxPath)) { WorkingDirectory = gameDirectory });
                 if (process == null) throw new IOException("게임 프로세스를 시작하지 못했습니다.");
