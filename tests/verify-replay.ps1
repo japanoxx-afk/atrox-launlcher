@@ -15,6 +15,10 @@ if (Test-Path -LiteralPath $template) {
     $type.GetMethod('Apply', $flags).Invoke($null, [object[]]@([IO.BinaryWriter]$writer))
     $assembly.GetType('AtroxLauncher.ConstructionSupport', $true).GetMethod('Apply', $flags).Invoke($null, [object[]]@([IO.BinaryWriter]$writer))
     $assembly.GetType('AtroxLauncher.GameplaySupport', $true).GetMethod('Apply', $flags).Invoke($null, [object[]]@([IO.BinaryWriter]$writer))
+    # MainForm installs the legacy high-resolution viewport before GamePatches.
+    $writer.Seek(0xdc87d, [IO.SeekOrigin]::Begin) | Out-Null
+    $writer.Write([int]944)
+    $assembly.GetType('AtroxLauncher.GamePatches', $true).GetMethod('Apply', $flags).Invoke($null, [object[]]@([IO.BinaryWriter]$writer, $true, [int]10))
     foreach ($hook in @(0x630e0,0x63223,0xb8a60,0xb8ef9,0xc7271)) {
         if ($bytes[$hook] -ne 0xe9) { throw 'Missing replay hook.' }
     }

@@ -73,3 +73,26 @@ for replay, modifier in ((False,0),(False,0x11),(False,0x10),(False,0x12),(True,
     for r,v in regs.items():assert u.reg_read(r)==v
     assert u.reg_read(UC_X86_REG_EFLAGS)==0x246
 print('F2 camera recall suppressed; modified keys/replay and CPU state preserved (5 paths).')
+
+# Run the native input-window initialization and native mouse hit test. This
+# covers the added lower/right area even without a mouse movement event.
+u=Uc(UC_ARCH_X86,UC_MODE_32)
+u.mem_map(0x400000,0xb00000);u.mem_write(0x400000,image)
+u.mem_map(0x1000000,0x10000)
+u.reg_write(UC_X86_REG_ESP,0x1008000)
+def bounds_hook(uc,a,size,data):
+    if a==0x4055bf:uc.emu_stop()
+u.hook_add(UC_HOOK_CODE,bounds_hook)
+u.emu_start(0x41959f,0,count=100)
+rect=bytes(u.mem_read(u.reg_read(UC_X86_REG_ESP)+4,16))
+assert struct.unpack('<4i',rect)==(0,0,1280,1024)
+u.mem_write(0x10010c0,rect)
+u.mem_write(0x6a5271,b'\0')
+for x,y,expected in ((1,1,True),(799,599,True),(900,700,True),(1279,1023,True),
+                     (1280,700,False),(900,1024,False),(-1,700,False)):
+    sp=0x1008000
+    u.mem_write(sp,struct.pack('<Iii',0x100f000,x,y))
+    u.reg_write(UC_X86_REG_ECX,0x1001000);u.reg_write(UC_X86_REG_ESP,sp)
+    u.emu_start(0x418630,0x100f000,count=100)
+    assert bool(u.reg_read(UC_X86_REG_EAX)&0xff)==expected,(x,y)
+print('Native input-window initialization and expanded-area hit tests passed (7 points).')
