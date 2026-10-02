@@ -54,6 +54,33 @@ namespace AtroxLauncher
             writer.Seek(name, SeekOrigin.Begin); writer.Write(Encoding.ASCII.GetBytes(".\\AtroxReplay.dll\0"));
             writer.Seek(export, SeekOrigin.Begin); writer.Write(Encoding.ASCII.GetBytes("GameplayEvent\0"));
             ApplyExtendedSelection(writer, name, export);
+            ApplySelectionCameraGuard(writer);
+        }
+        static void ApplySelectionCameraGuard(BinaryWriter writer)
+        {
+            // F2 is also the engine's first camera bookmark. Reserve bare F2
+            // for army selection, retaining modifier/bookmark and replay input.
+            const int start = 0x1a7e00, entry = 0x19ea8;
+            Expect(writer, start, Enumerable.Repeat((byte)0xcc, 128).ToArray());
+            Expect(writer, entry, BitConverter.GetBytes(0x419b50));
+            var code = new List<byte>();
+            Action<int> num = n => code.AddRange(BitConverter.GetBytes(n));
+            code.AddRange(new byte[] {0x9c,0x60,0x83,0x3d}); num(0xb1e8e8);
+            code.AddRange(new byte[] {0xff,0x75,0}); int replay = code.Count - 1;
+            var modified = new List<int>();
+            foreach (byte key in new byte[] {0x11,0x10,0x12})
+            {
+                code.AddRange(new byte[] {0x6a,key,0xff,0x15}); num(0xe672c8);
+                code.AddRange(new byte[] {0xf6,0xc4,0x80,0x75,0}); modified.Add(code.Count - 1);
+            }
+            code.AddRange(new byte[] {0x61,0x9d,0xe9});
+            num(0x19df4 - (start + code.Count + 4));
+            code[replay] = (byte)(code.Count - replay - 1);
+            foreach (int jump in modified) code[jump] = (byte)(code.Count - jump - 1);
+            code.AddRange(new byte[] {0x61,0x9d,0xe9});
+            num(0x19b50 - (start + code.Count + 4));
+            writer.Seek(start, SeekOrigin.Begin); writer.Write(code.ToArray());
+            writer.Seek(entry, SeekOrigin.Begin); writer.Write(0x400000 + start);
         }
         static void ApplyExtendedSelection(BinaryWriter writer, int name, int export)
         {

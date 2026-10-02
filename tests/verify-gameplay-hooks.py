@@ -45,3 +45,31 @@ for event, (site, length, pop) in enumerate(((0x503f90,7,8),(0x43d850,6,4),(0x46
             assert u.reg_read(UC_X86_REG_EAX)==11
         for r in (UC_X86_REG_EBX,UC_X86_REG_ESI,UC_X86_REG_EDI,UC_X86_REG_EBP):assert u.reg_read(r)==regs[r]
 print('15 gameplay trampoline paths passed: arguments, fallback, registers and stack cleanup.')
+
+# Exercise the actual F2 switch destination. Bare F2 must bypass native camera
+# recall, while Ctrl/Shift/Alt bookmarks and replay controls keep their route.
+for replay, modifier in ((False,0),(False,0x11),(False,0x10),(False,0x12),(True,0)):
+    u=Uc(UC_ARCH_X86,UC_MODE_32)
+    u.mem_map(0x400000,0xb00000);u.mem_write(0x400000,image)
+    u.mem_map(0x1000000,0x10000);u.mem_map(0x2000000,0x10000)
+    u.mem_write(0xb1e8e8,struct.pack('<i',0 if replay else -1))
+    u.mem_write(0xe672c8,struct.pack('<I',0x2000100))
+    regs={UC_X86_REG_EAX:7,UC_X86_REG_EBX:11,UC_X86_REG_ECX:13,UC_X86_REG_EDX:17,
+          UC_X86_REG_ESI:19,UC_X86_REG_EDI:23,UC_X86_REG_EBP:29,UC_X86_REG_ESP:0x1008000}
+    for r,v in regs.items():u.reg_write(r,v)
+    u.reg_write(UC_X86_REG_EFLAGS,0x246)
+    def camera_hook(uc,a,size,data):
+        if a in (0x419b50,0x419df4):uc.emu_stop();return
+        if a==0x2000100:
+            s=uc.reg_read(UC_X86_REG_ESP)
+            ret,key=struct.unpack('<2I',uc.mem_read(s,8))
+            uc.reg_write(UC_X86_REG_EAX,0x8000 if key==modifier else 0)
+            uc.reg_write(UC_X86_REG_ECX,0xdead);uc.reg_write(UC_X86_REG_EDX,0xbeef)
+            uc.reg_write(UC_X86_REG_ESP,s+8);uc.reg_write(UC_X86_REG_EIP,ret)
+    u.hook_add(UC_HOOK_CODE,camera_hook)
+    start=struct.unpack('<I',u.mem_read(0x419ea8,4))[0]
+    u.emu_start(start,0,count=200)
+    assert u.reg_read(UC_X86_REG_EIP)==(0x419b50 if replay or modifier else 0x419df4)
+    for r,v in regs.items():assert u.reg_read(r)==v
+    assert u.reg_read(UC_X86_REG_EFLAGS)==0x246
+print('F2 camera recall suppressed; modified keys/replay and CPU state preserved (5 paths).')

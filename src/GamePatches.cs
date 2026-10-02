@@ -110,6 +110,13 @@ namespace AtroxLauncher
             writer.Seek(0x104118, SeekOrigin.Begin);
             writer.Write((byte)0xe8); writer.Write(RallyCave - 0x104118 - 5); writer.Write((byte)0x90);
             if (!highResolution) return;
+            // The game input window still covered only 800x600 even when the
+            // DirectDraw surface/HUD had been enlarged. Stationary hotkeys in
+            // the added lower/right area must use the same input bounds.
+            Expect(writer, 0x195a9, BitConverter.GetBytes(800));
+            Expect(writer, 0x195ae, BitConverter.GetBytes(600));
+            writer.Seek(0x195a9, SeekOrigin.Begin); writer.Write(1280);
+            writer.Seek(0x195ae, SeekOrigin.Begin); writer.Write(1024);
             // Keep the HUD sprite hit test; remove the old 800x600-era full-width Y cutoff.
             Expect(writer, 0x1d5c4, new byte[] { 0xe6, 1, 0, 0 });
             writer.Seek(0x1d5c4, SeekOrigin.Begin); writer.Write(1024);

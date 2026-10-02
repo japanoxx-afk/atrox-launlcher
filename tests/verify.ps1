@@ -74,6 +74,8 @@ $code = [byte[]]$patches.GetMethod('BuildTileRows', $flags).Invoke($null, $null)
 $wrap = [byte[]]$patches.GetMethod('BuildTerrainWrap', $flags).Invoke($null, $null)
 $rally = [byte[]]$patches.GetMethod("BuildResourceRally", $flags).Invoke($null, $null)
 $fixture = New-Object byte[] 0x180000
+([BitConverter]::GetBytes([int]800)).CopyTo($fixture,0x195a9)
+([BitConverter]::GetBytes([int]600)).CopyTo($fixture,0x195ae)
 ([byte[]]@(0xff,0x90,0xa0,0,0,0)).CopyTo($fixture,0x104118)
 ([byte[]]@(0xe6,1,0,0)).CopyTo($fixture,0x1d5c4)
 for ($index=0x14160; $index -lt 0x14310; $index++) { $fixture[$index]=0xcc }
@@ -94,6 +96,7 @@ if ([BitConverter]::ToInt32($fixture,0xdc87d) -ne 1024) { throw 'World viewport 
 if ($fixture[0x17c60f] -ne 56) { throw 'Terrain surface cannot hold rounded tile cache.' }
 if ($fixture[0x17561f] -ne 56) { throw 'DirectDraw terrain surface cannot hold rounded tile cache.' }
 if ([BitConverter]::ToInt32($fixture,0x1d5c4) -ne 1024) { throw 'Preview still uses the original HUD height.' }
+if ([BitConverter]::ToInt32($fixture,0x195a9) -ne 1280 -or [BitConverter]::ToInt32($fixture,0x195ae) -ne 1024) { throw 'Game input bounds differ from the enlarged surface.' }
 if ($rally.Length -gt 432 -or $fixture[0x104118] -ne 0xe8) { throw 'Resource rally hook is invalid.' }
 if ($fixture[0x63209] -ne 0) { throw 'Black HUD side fill unexpectedly installed.' }
 try { $apply.Invoke($null, [object[]]@([IO.BinaryWriter]$writer, $true, [int]40)); throw 'Modified template was accepted.' }
