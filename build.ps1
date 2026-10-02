@@ -1,4 +1,4 @@
-param([string]$Version = '1.6.3.0')
+param([string]$Version = '1.6.4.0')
 $ErrorActionPreference = 'Stop'
 $repoRoot = $PSScriptRoot
 $msbuild = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe'

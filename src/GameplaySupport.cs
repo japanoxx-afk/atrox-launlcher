@@ -55,6 +55,29 @@ namespace AtroxLauncher
             writer.Seek(export, SeekOrigin.Begin); writer.Write(Encoding.ASCII.GetBytes("GameplayEvent\0"));
             ApplyExtendedSelection(writer, name, export);
             ApplySelectionCameraGuard(writer);
+            ApplyBuildingCosts(writer, name, export);
+        }
+        static void ApplyBuildingCosts(BinaryWriter writer, int name, int export)
+        {
+            // Player constructor: both parameter-file paths have completed.
+            // Run once per fresh table, before units/UI read the shared prices.
+            const int start = 0x1a7e80, site = 0x94d1c;
+            byte[] original = {0x8d,0x86,0xac,0x38,1,0};
+            Expect(writer, start, Enumerable.Repeat((byte)0xcc, 256).ToArray());
+            Expect(writer, site, original);
+            var code = new List<byte>();
+            Action<int> num = n => code.AddRange(BitConverter.GetBytes(n));
+            Action<int> api = n => {code.AddRange(new byte[] {0xff,0x15});num(n);};
+            code.AddRange(new byte[] {0x9c,0x60,0x68}); num(0x400000 + name + 2); api(0xe66e58);
+            code.AddRange(new byte[] {0x85,0xc0,0x75,11,0x68}); num(0x400000 + name); api(0xe66e64);
+            code.AddRange(new byte[] {0x85,0xc0,0x74,0}); int missing = code.Count - 1;
+            code.Add(0x68); num(0x400000 + export); code.Add(0x50); api(0xe66e68);
+            code.AddRange(new byte[] {0x85,0xc0,0x74,11,0x8b,0x4c,0x24,4,0x6a,0,0x51,0x6a,4,0xff,0xd0});
+            code[missing] = (byte)(code.Count - missing - 1);
+            code.AddRange(new byte[] {0x61,0x9d}); code.AddRange(original);
+            code.Add(0xe9); num(site + original.Length - (start + code.Count + 4));
+            writer.Seek(start, SeekOrigin.Begin); writer.Write(code.ToArray());
+            writer.Seek(site, SeekOrigin.Begin); writer.Write((byte)0xe9); writer.Write(start - site - 5); writer.Write((byte)0x90);
         }
         static void ApplySelectionCameraGuard(BinaryWriter writer)
         {

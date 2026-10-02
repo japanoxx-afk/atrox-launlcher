@@ -46,6 +46,41 @@ for event, (site, length, pop) in enumerate(((0x503f90,7,8),(0x43d850,6,4),(0x46
         for r in (UC_X86_REG_EBX,UC_X86_REG_ESI,UC_X86_REG_EDI,UC_X86_REG_EBP):assert u.reg_read(r)==regs[r]
 print('15 gameplay trampoline paths passed: arguments, fallback, registers and stack cleanup.')
 
+for mode in ('present', 'load', 'missing', 'noexport'):
+    u = Uc(UC_ARCH_X86, UC_MODE_32)
+    u.mem_map(0x400000, 0xb00000); u.mem_write(0x400000, image)
+    u.mem_map(0x1000000, 0x10000); u.mem_map(0x2000000, 0x10000)
+    regs = {UC_X86_REG_EAX:11, UC_X86_REG_EBX:22, UC_X86_REG_ECX:33,
+            UC_X86_REG_EDX:44, UC_X86_REG_ESI:0x1001000, UC_X86_REG_EDI:66,
+            UC_X86_REG_EBP:77, UC_X86_REG_ESP:0x1008000}
+    for r,v in regs.items(): u.reg_write(r,v)
+    u.reg_write(UC_X86_REG_EFLAGS, 0x246)
+    for iat,target in ((0xe66e58,0x2000100),(0xe66e64,0x2000200),(0xe66e68,0x2000300)):
+        u.mem_write(iat,struct.pack('<I',target))
+    calls=[]
+    def cost_hook(uc,a,size,data):
+        if a==0x494d22: uc.emu_stop(); return
+        if a not in (0x2000100,0x2000200,0x2000300,0x2000400): return
+        s=uc.reg_read(UC_X86_REG_ESP); ret=struct.unpack('<I',uc.mem_read(s,4))[0]
+        consumed={0x2000100:4,0x2000200:4,0x2000300:8,0x2000400:12}[a]
+        result=123
+        if a==0x2000100 and mode!='present': result=0
+        if a==0x2000200 and mode=='missing': result=0
+        if a==0x2000300: result=0 if mode=='noexport' else 0x2000400
+        if a==0x2000400:
+            calls.append(struct.unpack('<3I',uc.mem_read(s+4,12)))
+            assert calls[-1]==(4,regs[UC_X86_REG_ESI],0)
+        uc.reg_write(UC_X86_REG_EAX,result); uc.reg_write(UC_X86_REG_ECX,0xdead)
+        uc.reg_write(UC_X86_REG_EDX,0xbeef)
+        uc.reg_write(UC_X86_REG_ESP,s+4+consumed); uc.reg_write(UC_X86_REG_EIP,ret)
+    u.hook_add(UC_HOOK_CODE,cost_hook); u.emu_start(0x494d1c,0,count=200)
+    assert u.reg_read(UC_X86_REG_EIP)==0x494d22
+    assert bool(calls)==(mode in ('present','load'))
+    for r,v in regs.items():
+        assert u.reg_read(r)==(regs[UC_X86_REG_ESI]+0x138ac if r==UC_X86_REG_EAX else v)
+    assert u.reg_read(UC_X86_REG_EFLAGS)==0x246
+print('Building-cost constructor hook passed: loaded/missing DLL and export, arguments, CPU state (4 paths).')
+
 # Exercise the actual F2 switch destination. Bare F2 must bypass native camera
 # recall, while Ctrl/Shift/Alt bookmarks and replay controls keep their route.
 for replay, modifier in ((False,0),(False,0x11),(False,0x10),(False,0x12),(True,0)):

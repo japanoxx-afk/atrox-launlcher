@@ -1,8 +1,28 @@
 #include "../native/GameplayRules.h"
+#include "../native/BuildingCosts.h"
 #include <cassert>
 #include <iostream>
 int main() {
     using namespace gameplay;
+    std::vector<unsigned char> prices(133 * ParameterStride, 0);
+    for (int type = 1; type < 133; ++type) {
+        auto record = prices.data() + type * ParameterStride;
+        int race = type <= 57 ? 0 : type <= 72 ? 1 : 2;
+        int16_t muon = static_cast<int16_t>(type * 3), gas = 75, time = 100;
+        std::memcpy(record, &type, 4); std::memcpy(record + 8, &race, 4);
+        std::memcpy(record + 0x98, &time, 2);
+        std::memcpy(record + 0x9a, &muon, 2); std::memcpy(record + 0x9c, &gas, 2);
+    }
+    auto expected = prices;
+    RaiseBuildingCosts(prices.data(), false);
+    assert(prices == expected); // Legacy replay economics must remain unchanged.
+    for (int type = 58; type <= 85; ++type) {
+        int16_t muon = static_cast<int16_t>(type * 3 + 50);
+        std::memcpy(expected.data() + type * ParameterStride + 0x9a, &muon, 2);
+    }
+    RaiseBuildingCosts(prices.data(), true);
+    assert(prices == expected); // All unit/Human costs, gas/time and other fields unchanged.
+    std::cout << "28 building prices increased by 50; legacy replay and all other fields preserved.\n";
     std::vector<unsigned> ids{11, 22, 33};
     std::vector<bool> ready{true, true, true};
     unsigned previous = 0;

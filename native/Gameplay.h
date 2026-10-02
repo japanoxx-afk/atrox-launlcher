@@ -1,4 +1,5 @@
 #include "GameplayRules.h"
+#include "BuildingCosts.h"
 
 namespace gameplay {
 using construction::Field;
@@ -285,5 +286,8 @@ extern "C" __declspec(dllexport) int __stdcall GameplayEvent(DWORD event, BYTE* 
     if (event == 1) return gameplay::Command(context, static_cast<BYTE*>(argument));
     if (event == 2) gameplay::Keyboard(context);
     if (event == 3) gameplay::SelectionPacket(context, static_cast<DWORD*>(argument));
+    if (event == 4) gameplay::RaiseBuildingCosts(context + 0xe24,
+        *reinterpret_cast<int*>(0xb1e8e8) == -1 || construction::HasMarker(
+            *reinterpret_cast<HANDLE*>(0xb2687c), gameplay::BuildingCostRule, sizeof(gameplay::BuildingCostRule)));
     return 0;
 }

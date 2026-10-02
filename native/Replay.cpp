@@ -208,6 +208,7 @@ extern "C" __declspec(dllexport) void __stdcall ReplayEvent(DWORD event) {
         construction::MarkRecording();
         construction::MarkRecording(gameplay::ReplayRule, sizeof(gameplay::ReplayRule));
         construction::MarkRecording(gameplay::SelectionRule, sizeof(gameplay::SelectionRule));
+        construction::MarkRecording(gameplay::BuildingCostRule, sizeof(gameplay::BuildingCostRule));
         AutoSave(); return;
     }
     if (event == 2) { vision.End(); return; }
