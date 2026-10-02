@@ -40,7 +40,10 @@ namespace AtroxLauncher
             autoReplay.CheckedChanged += (sender, args) => { replayMaximum.Enabled = autoReplay.Checked; WriteConfig(); };
             replayMaximum.ValueChanged += WriteConfig;
             Text = "AtroxLauncher v" + LauncherUpdate.CurrentVersion.ToString(3);
-            Shown += (sender, args) => LauncherUpdate.CleanupPrevious(System.Reflection.Assembly.GetExecutingAssembly().Location);
+            Shown += (sender, args) => {
+                LauncherUpdate.CleanupPrevious(LauncherUpdate.ExecutablePath);
+                LauncherUpdate.CleanupPrevious(System.Reflection.Assembly.GetExecutingAssembly().Location);
+            };
             updateButton.Click += async (sender, args) => {
                 updateButton.Enabled = false;
                 try {

@@ -16,6 +16,7 @@ namespace AtroxLauncher
     {
         internal const string Repository = "japanoxx-afk/atrox-launlcher";
         internal static readonly Version CurrentVersion = Assembly.GetExecutingAssembly().GetName().Version;
+        internal static string ExecutablePath = Assembly.GetExecutingAssembly().Location;
         internal sealed class Release
         {
             internal Version Version;
@@ -101,8 +102,8 @@ namespace AtroxLauncher
             var directory = Path.Combine(Path.GetTempPath(), "AtroxLauncherApply-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(directory);
             var helper = Path.Combine(directory, "ApplyUpdate.exe");
-            File.Copy(Assembly.GetExecutingAssembly().Location, helper);
-            System.Diagnostics.Process.Start(new ProcessStartInfo(helper, "--apply-update " + System.Diagnostics.Process.GetCurrentProcess().Id + " " + Quote(stagedPath) + " " + Quote(Assembly.GetExecutingAssembly().Location)) { UseShellExecute = false });
+            File.Copy(ExecutablePath, helper);
+            System.Diagnostics.Process.Start(new ProcessStartInfo(helper, "--apply-update " + System.Diagnostics.Process.GetCurrentProcess().Id + " " + Quote(stagedPath) + " " + Quote(ExecutablePath)) { UseShellExecute = false });
         }
         internal static string Quote(string value) { return "\"" + value + "\""; }
         internal static string VersionedPath(string target, Version version)
@@ -111,23 +112,20 @@ namespace AtroxLauncher
             var display = normalized.Revision == 0 ? normalized.ToString(3) : normalized.ToString(4);
             return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(target)), "AtroxLauncher_v" + display + ".exe");
         }
-        internal static bool EnsureVersionedName()
+        internal static void EnsureVersionedName()
         {
-            var current = Assembly.GetExecutingAssembly().Location;
-            if (string.Equals(current, VersionedPath(current, CurrentVersion), StringComparison.OrdinalIgnoreCase)) return false;
-            // Old update helpers preserve the old filename. Let the newly installed
-            // version perform the migration too, so existing launchers can upgrade.
-            var directory = Path.Combine(Path.GetTempPath(), "AtroxLauncherRename-" + Guid.NewGuid().ToString("N"));
+            var current = ExecutablePath;
+            var target = VersionedPath(current, CurrentVersion);
+            if (string.Equals(current, target, StringComparison.OrdinalIgnoreCase)) return;
+            // Renaming is optional startup housekeeping. Never exit the launcher
+            // or require a second executable in Temp before displaying its window.
             try
             {
-                Directory.CreateDirectory(directory);
-                var staged = Path.Combine(directory, "AtroxLauncher.exe");
-                File.Copy(current, staged);
-                StartApply(staged);
-                return true;
+                File.Move(current, target);
+                ExecutablePath = target;
             }
-            catch (IOException) { return false; }
-            catch (UnauthorizedAccessException) { return false; }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
         }
         internal static string ReplaceAndRename(string staged, string original)
         {

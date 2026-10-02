@@ -20,6 +20,7 @@ jobs:
         run: |
           ./tests/verify.ps1
           ./tests/verify-replay.ps1
+          ./tests/verify-startup.ps1
       - uses: actions/upload-artifact@v4
         with:
           name: AtroxLauncher
