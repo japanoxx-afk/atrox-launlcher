@@ -109,25 +109,43 @@ for replay, modifier in ((False,0),(False,0x11),(False,0x10),(False,0x12),(True,
     assert u.reg_read(UC_X86_REG_EFLAGS)==0x246
 print('F2 camera recall suppressed; modified keys/replay and CPU state preserved (5 paths).')
 
-# Run the native input-window initialization and native mouse hit test. This
-# covers the added lower/right area even without a mouse movement event.
-u=Uc(UC_ARCH_X86,UC_MODE_32)
-u.mem_map(0x400000,0xb00000);u.mem_write(0x400000,image)
-u.mem_map(0x1000000,0x10000)
-u.reg_write(UC_X86_REG_ESP,0x1008000)
-def bounds_hook(uc,a,size,data):
-    if a==0x4055bf:uc.emu_stop()
-u.hook_add(UC_HOOK_CODE,bounds_hook)
-u.emu_start(0x41959f,0,count=100)
-rect=bytes(u.mem_read(u.reg_read(UC_X86_REG_ESP)+4,16))
-assert struct.unpack('<4i',rect)==(0,0,1280,1024)
-u.mem_write(0x10010c0,rect)
-u.mem_write(0x6a5271,b'\0')
-for x,y,expected in ((1,1,True),(799,599,True),(900,700,True),(1279,1023,True),
-                     (1280,700,False),(900,1024,False),(-1,700,False)):
-    sp=0x1008000
-    u.mem_write(sp,struct.pack('<Iii',0x100f000,x,y))
-    u.reg_write(UC_X86_REG_ECX,0x1001000);u.reg_write(UC_X86_REG_ESP,sp)
-    u.emu_start(0x418630,0x100f000,count=100)
-    assert bool(u.reg_read(UC_X86_REG_EAX)&0xff)==expected,(x,y)
-print('Native input-window initialization and expanded-area hit tests passed (7 points).')
+for width,height in ((1024,768),(1280,1024)):
+    image=(Path(__file__).resolve().parent.parent / f'artifacts/resolution-{width}-{height}.bin').read_bytes()
+    # Run the native input-window initialization and native mouse hit test. This
+    # covers the added lower/right area even without a mouse movement event.
+    u=Uc(UC_ARCH_X86,UC_MODE_32)
+    u.mem_map(0x400000,0xb00000);u.mem_write(0x400000,image)
+    u.mem_map(0x1000000,0x10000)
+    u.reg_write(UC_X86_REG_ESP,0x1008000)
+    def bounds_hook(uc,a,size,data):
+        if a==0x4055bf:uc.emu_stop()
+    u.hook_add(UC_HOOK_CODE,bounds_hook)
+    u.emu_start(0x41959f,0,count=100)
+    rect=bytes(u.mem_read(u.reg_read(UC_X86_REG_ESP)+4,16))
+    assert struct.unpack('<4i',rect)==(0,0,width,height)
+    u.mem_write(0x10010c0,rect)
+    u.mem_write(0x6a5271,b'\0')
+    for x,y,expected in ((1,1,True),(799,599,True),(900,700,True),(width-1,height-1,True),
+                         (width,700,False),(900,height,False),(-1,700,False)):
+        sp=0x1008000
+        u.mem_write(sp,struct.pack('<Iii',0x100f000,x,y))
+        u.reg_write(UC_X86_REG_ECX,0x1001000);u.reg_write(UC_X86_REG_ESP,sp)
+        u.emu_start(0x418630,0x100f000,count=100)
+        assert bool(u.reg_read(UC_X86_REG_EAX)&0xff)==expected,(x,y)
+    print('Native input-window initialization and expanded-area hit tests passed (7 points).')
+
+# Execute viewport-to-cache count setup from the actual patched game image.
+for width,height in ((1024,768),(1280,1024)):
+    image=(Path(__file__).resolve().parent.parent / f'artifacts/resolution-{width}-{height}.bin').read_bytes()
+    u=Uc(UC_ARCH_X86,UC_MODE_32)
+    u.mem_map(0x400000,0xb00000); u.mem_write(0x400000,image)
+    u.mem_map(0x1000000,0x10000)
+    u.reg_write(UC_X86_REG_ESI,0x1001000); u.reg_write(UC_X86_REG_ESP,0x1008000)
+    u.mem_write(0x100107c,struct.pack('<2I',width,height))
+    u.emu_start(0x4dc8ce,0x4dc909,count=100)
+    cols40,rows=struct.unpack('<2I',u.mem_read(0x1001084,8))
+    assert (cols40//2+1)*80==((width+79)//80+1)*80
+    assert (rows+1)*40==((height+39)//40+1)*40
+    assert width+image[0x175614]==width+image[0x17c621]==(cols40//2+1)*80
+    assert height+image[0x17561f]==height+image[0x17c60f]==(rows+1)*40
+print('Native tile counts and both allocated terrain surfaces match for both resolutions.')

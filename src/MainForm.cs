@@ -29,11 +29,17 @@ namespace AtroxLauncher
         static readonly int[] ScrollRates = { 5, 10, 20, 40, 60, 80, 100 };
         readonly CheckBox autoReplay = new CheckBox { Text = "리플레이 자동 저장", Checked = true };
         readonly NumericUpDown replayMaximum = new NumericUpDown { Minimum = 1, Maximum = 1000, Value = 20 };
+        readonly ComboBox resolution = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
+        int ResolutionWidth => resolution.SelectedIndex == 1 ? 1024 : resolution.SelectedIndex == 2 ? 1280 : 800;
+        int ResolutionHeight => resolution.SelectedIndex == 1 ? 768 : resolution.SelectedIndex == 2 ? 1024 : 600;
         readonly ComboBox scrollSpeed = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
 
         public MainForm()
         {
             InitializeComponent();
+            resolution.Items.AddRange(new object[] { "800 × 600 (원본)", "1024 × 768 (중간)", "1280 × 1024 (넓게)" });
+            resolution.SelectedIndex = 0;
+            resolution.SelectedIndexChanged += WriteConfig;
             scrollSpeed.Items.AddRange(new object[] { "5% (아주 느림)", "10% (권장)", "20%", "40%", "60%", "80%", "100% (기존)" });
             scrollSpeed.SelectedIndex = 1;
             scrollSpeed.SelectedIndexChanged += WriteConfig;
@@ -91,13 +97,15 @@ namespace AtroxLauncher
 
             // NoCdCheckBox.Enabled = bool.Parse(jObject["NoCD"][0].ToString());
             WindowModeCheckBox.Enabled = bool.Parse(jObject["WindowMode"][0].ToString());
-            HighResolutionCheckBox.Enabled = bool.Parse(jObject["HighResolution"][0].ToString());
+            resolution.Enabled = true;
             // ParameterCheckBox.Enabled = bool.Parse(jObject["ReadMapData"][0].ToString());
             CustomPakCheckBox.Enabled = bool.Parse(jObject["CustomPak"][0].ToString());
 
             // NoCdCheckBox.CheckState = EnumParse<CheckState>(jObject["NoCD"][1].ToString());
             WindowModeCheckBox.CheckState = EnumParse<CheckState>(jObject["WindowMode"][1].ToString());
-            HighResolutionCheckBox.CheckState = EnumParse<CheckState>(jObject["HighResolution"][1].ToString());
+            var savedResolution = (string)jObject["Resolution"];
+            resolution.SelectedIndex = savedResolution == "1024x768" ? 1 : savedResolution == "1280x1024" ? 2 : savedResolution == "800x600" ? 0 :
+                (string)jObject["HighResolution"]?[1] == "Checked" ? 2 : 0;
             // ParameterCheckBox.CheckState = EnumParse<CheckState>(jObject["ReadMapData"][1].ToString());
             CustomPakCheckBox.CheckState = EnumParse<CheckState>(jObject["CustomPak"][1].ToString());
 
@@ -124,7 +132,8 @@ namespace AtroxLauncher
                 { "Hyperlink", new JArray{ LinkLabel.Text, LinkLabelLink } },
                 // { "NoCD", new JArray{ NoCdCheckBox.Enabled.ToString(), NoCdCheckBox.CheckState.ToString() } },
                 { "WindowMode", new JArray{ WindowModeCheckBox.Enabled.ToString(), WindowModeCheckBox.CheckState.ToString() } },
-                { "HighResolution", new JArray{ HighResolutionCheckBox.Enabled.ToString(), HighResolutionCheckBox.CheckState.ToString() } },
+                { "Resolution", ResolutionWidth + "x" + ResolutionHeight },
+                { "HighResolution", new JArray{ "True", resolution.SelectedIndex > 0 ? "Checked" : "Unchecked" } },
                 // { "ReadMapData", new JArray{ ParameterCheckBox.Enabled.ToString(), ParameterCheckBox.CheckState.ToString() } },
                 { "CustomPak", new JArray{ CustomPakCheckBox.Enabled.ToString(), CustomPakCheckBox.CheckState.ToString() } }
             };
@@ -247,75 +256,6 @@ namespace AtroxLauncher
 
                 // Keep the game's native fullscreen DirectDraw path. cnc-ddraw owns window mode and scaling.
 
-                if (HighResolutionCheckBox.CheckState == CheckState.Checked)
-                {
-                    writer.Seek(0x0001D11A, SeekOrigin.Begin);
-                    writer.Write((byte)0xF1);
-
-                    writer.Seek(0x0001D211, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0x55, 0x03 });
-
-                    writer.Seek(0x0001D26E, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0x31, 0x03 });
-
-                    writer.Seek(0x0001D278, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0x7D, 0x03 });
-
-                    writer.Seek(0x0001D2E3, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0xC6, 0x02 });
-
-                    writer.Seek(0x0001D2ED, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0x8F, 0x03 });
-
-                    writer.Seek(0x0001D95B, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0x8B, 0x40, 0x24, 0x05, 0xA8, 0x01, 0x00, 0x00, 0x99, 0x2B, 0xC2, 0x8B, 0xF0, 0xD1, 0xFE, 0xE9, 0x87, 0x00, 0x00, 0x00, 0x90 });
-
-                    writer.Seek(0x0001D9EC, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0xE9, 0x6A, 0xFF, 0xFF, 0xFF, 0x90, 0x90, 0x90, 0x90, 0x90 });
-
-                    writer.Seek(0x0002384F, SeekOrigin.Begin);
-                    writer.Write((byte)0xF8);
-
-                    writer.Seek(0x00023859, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0xB3, 0x03 });
-
-                    writer.Seek(0x00023863, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0xE7, 0x02 });
-
-                    writer.Seek(0x0002386D, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0xD7, 0x03 });
-
-                    writer.Seek(0x00023877, SeekOrigin.Begin);
-                    writer.Write((byte)0xF6);
-
-                    writer.Seek(0x00023881, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0xD2, 0x03 });
-
-                    writer.Seek(0x0002388B, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0x1D, 0x03 });
-
-                    writer.Seek(0x00023895, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0x92, 0x03 });
-
-                    writer.Seek(0x0002389F, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0x0C, 0x04 });
-
-                    writer.Seek(0x000238A9, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0xA3, 0x03 });
-
-                    writer.Seek(0x000DC862, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0x00, 0x05 });
-
-                    writer.Seek(0x000DC86E, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0x00, 0x04 });
-
-                    writer.Seek(0x000DC876, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0x00, 0x05 });
-
-                    writer.Seek(0x000DC87D, SeekOrigin.Begin);
-                    writer.Write(new byte[] { 0xB0, 0x03 });
-                }
-
                 if (ParameterCheckBox.CheckState == CheckState.Checked)
                 {
                     writer.Seek(0x0007A33A, SeekOrigin.Begin);
@@ -365,7 +305,7 @@ namespace AtroxLauncher
                         writer.Write((byte)0x02);
                     }
                 }
-                GamePatches.Apply(writer, HighResolutionCheckBox.Checked, ScrollRates[scrollSpeed.SelectedIndex]);
+                GamePatches.Apply(writer, ResolutionWidth, ResolutionHeight, ScrollRates[scrollSpeed.SelectedIndex]);
             }
         }
     }

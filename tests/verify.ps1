@@ -81,7 +81,10 @@ $fixture = New-Object byte[] 0x180000
 for ($index=0x14160; $index -lt 0x14310; $index++) { $fixture[$index]=0xcc }
 ([byte[]]@(0x8b,0x4c,0x24,0x18,0x56,0xe8,0xfd,0x9d,0xfd,0xff)).CopyTo($fixture, 0x2d473)
 for ($index=0x2d2b0; $index -lt 0x2d330; $index++) { $fixture[$index]=0xcc }
-([byte[]]@(0xb0,3,0,0)).CopyTo($fixture,0xdc87d)
+([BitConverter]::GetBytes([int]480)).CopyTo($fixture,0xdc87d)
+([BitConverter]::GetBytes([int]800)).CopyTo($fixture,0xdc862)
+([BitConverter]::GetBytes([int]600)).CopyTo($fixture,0xdc86e)
+([BitConverter]::GetBytes([int]800)).CopyTo($fixture,0xdc876)
 ([byte[]]@(0xf7,0xe9,0xc1,0xfa,4)).CopyTo($fixture,0xdc8f3)
 ([byte[]]@(0x83,0xc0,0xd8,0x55,0x57,0xb9,0xf0,0x8c,0xde,0)).CopyTo($fixture,0xb8e69)
 ([byte[]]@(0x83,0xc2,0xd8)).CopyTo($fixture,0x17c60d)
@@ -90,7 +93,7 @@ for ($index=0x63610; $index -lt 0x636c0; $index++) { $fixture[$index]=0xcc }
 $stream = New-Object IO.MemoryStream(,$fixture)
 $writer = New-Object IO.BinaryWriter($stream)
 $apply = $patches.GetMethod('Apply', $flags)
-$apply.Invoke($null, [object[]]@([IO.BinaryWriter]$writer, $true, [int]40))
+$apply.Invoke($null, [object[]]@([IO.BinaryWriter]$writer, [int]1280, [int]1024, [int]40))
 if (0x2d473 + 5 + [BitConverter]::ToInt32($fixture, 0x2d474) -ne 0x2d2b0) { throw 'Scroll convergence hook missing.' }
 if ([BitConverter]::ToInt32($fixture,0xdc87d) -ne 1024) { throw 'World viewport does not reach the bottom.' }
 if ($fixture[0x17c60f] -ne 56) { throw 'Terrain surface cannot hold rounded tile cache.' }
@@ -99,7 +102,7 @@ if ([BitConverter]::ToInt32($fixture,0x1d5c4) -ne 1024) { throw 'Preview still u
 if ([BitConverter]::ToInt32($fixture,0x195a9) -ne 1280 -or [BitConverter]::ToInt32($fixture,0x195ae) -ne 1024) { throw 'Game input bounds differ from the enlarged surface.' }
 if ($rally.Length -gt 432 -or $fixture[0x104118] -ne 0xe8) { throw 'Resource rally hook is invalid.' }
 if ($fixture[0x63209] -ne 0) { throw 'Black HUD side fill unexpectedly installed.' }
-try { $apply.Invoke($null, [object[]]@([IO.BinaryWriter]$writer, $true, [int]40)); throw 'Modified template was accepted.' }
+try { $apply.Invoke($null, [object[]]@([IO.BinaryWriter]$writer, [int]1280, [int]1024, [int]40)); throw 'Modified template was accepted.' }
 catch { if ($_.Exception -isnot [IO.InvalidDataException] -and $_.Exception.InnerException -isnot [IO.InvalidDataException]) { throw } }
 $writer.Dispose()
 Write-Host 'Native terrain and scroll patch verification passed.'

@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using System.Windows.Forms;
 
 namespace AtroxLauncher
@@ -8,7 +8,7 @@ namespace AtroxLauncher
         private System.ComponentModel.IContainer components;
         private TextBox PathTextBox, JPakPathTextBox;
         private Button PathButton, JPakPathButton, RunButton, updateButton;
-        private CheckBox NoCdCheckBox, ParameterCheckBox, WindowModeCheckBox, HighResolutionCheckBox, CustomPakCheckBox;
+        private CheckBox NoCdCheckBox, ParameterCheckBox, WindowModeCheckBox, CustomPakCheckBox;
         private LinkLabel LinkLabel;
 
         protected override void Dispose(bool disposing)
@@ -55,8 +55,12 @@ namespace AtroxLauncher
             Controls.Add(options);
             WindowModeCheckBox = Option("창 모드로 시작", 18, 16, options);
             WindowModeCheckBox.TabIndex = 0;
-            HighResolutionCheckBox = Option("1280 × 1024 해상도", 300, 16, options);
-            HighResolutionCheckBox.TabIndex = 1;
+            resolution.SetBounds(300, 14, 265, 28);
+            resolution.TabIndex = 1;
+            resolution.FlatStyle = FlatStyle.Flat;
+            resolution.BackColor = Color.FromArgb(39, 51, 66);
+            resolution.ForeColor = ForeColor;
+            options.Controls.Add(resolution);
             options.Controls.Add(new Label { Text = "Alt + Enter로 전체화면 전환", Location = new Point(18, 47), Size = new Size(530, 22), ForeColor = muted });
             options.Controls.Add(new Label { Text = "화면 이동 속도", Location = new Point(18, 89), Size = new Size(145, 24) });
             scrollSpeed.SetBounds(300, 85, 265, 28);

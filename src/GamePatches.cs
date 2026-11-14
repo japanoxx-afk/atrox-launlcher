@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
@@ -94,7 +94,61 @@ namespace AtroxLauncher
             return code;
         }
 
-        internal static void Apply(BinaryWriter writer, bool highResolution, int scrollPercent)
+        internal static byte[] BuildTileColumns()
+        {
+            var code = BuildTileRows();
+            BitConverter.GetBytes(0x4dc8db - (0x400000 + TerrainCave + 64 + code.Length)).CopyTo(code, 9);
+            return code;
+        }
+
+        internal static byte[] BuildTerrainHorizontalWrap()
+        {
+            var code = new byte[] {
+                0x8b,0x8e,0x38,0xc5,0x35,0,0x6b,0xc9,80,
+                0x2b,0x0d,0x78,0x6e,0xb2,0,0x29,0xc8,
+                0x89,0x44,0x24,0x2c,0xe9,0,0,0,0 };
+            BitConverter.GetBytes(0x4b8e36 - (0x400000 + TerrainCave + 96 + code.Length)).CopyTo(code,22);
+            return code;
+        }
+
+        internal static void Apply(BinaryWriter writer, int width, int height, int scrollPercent)
+        {
+            if (!((width == 800 && height == 600) || (width == 1024 && height == 768) || (width == 1280 && height == 1024)))
+                throw new ArgumentOutOfRangeException(nameof(width));
+            if (width != 800)
+            {
+                Expect(writer, 0xdc862, BitConverter.GetBytes(800));
+                Expect(writer, 0xdc86e, BitConverter.GetBytes(600));
+                Expect(writer, 0xdc876, BitConverter.GetBytes(800));
+                // HUD anchors retain the proven 1280x1024 layout and its pixel corrections.
+                int horizontal = (width - 1280) / 2, vertical = height - 1024;
+                writer.Seek(0x0001D11A, SeekOrigin.Begin); writer.Write((byte)(1 + (width - 800) / 2));
+                writer.Seek(0x0001D211, SeekOrigin.Begin); writer.Write(853 + vertical);
+                writer.Seek(0x0001D26E, SeekOrigin.Begin); writer.Write(817 + horizontal);
+                writer.Seek(0x0001D278, SeekOrigin.Begin); writer.Write(893 + vertical);
+                writer.Seek(0x0001D2E3, SeekOrigin.Begin); writer.Write(710 + horizontal);
+                writer.Seek(0x0001D2ED, SeekOrigin.Begin); writer.Write(911 + vertical);
+                writer.Seek(0x0001D95B, SeekOrigin.Begin); writer.Write(new byte[] { 0x8B, 0x40, 0x24, 0x05, 0xA8, 0x01, 0x00, 0x00, 0x99, 0x2B, 0xC2, 0x8B, 0xF0, 0xD1, 0xFE, 0xE9, 0x87, 0x00, 0x00, 0x00, 0x90 });
+                writer.Seek(0x0001D9EC, SeekOrigin.Begin); writer.Write(new byte[] { 0xE9, 0x6A, 0xFF, 0xFF, 0xFF, 0x90, 0x90, 0x90, 0x90, 0x90 });
+                writer.Seek(0x0002384F, SeekOrigin.Begin); writer.Write(760 + horizontal);
+                writer.Seek(0x00023859, SeekOrigin.Begin); writer.Write(947 + vertical);
+                writer.Seek(0x00023863, SeekOrigin.Begin); writer.Write(743 + horizontal);
+                writer.Seek(0x0002386D, SeekOrigin.Begin); writer.Write(983 + vertical);
+                writer.Seek(0x00023877, SeekOrigin.Begin); writer.Write(758 + horizontal);
+                writer.Seek(0x00023881, SeekOrigin.Begin); writer.Write(978 + vertical);
+                writer.Seek(0x0002388B, SeekOrigin.Begin); writer.Write(797 + horizontal);
+                writer.Seek(0x00023895, SeekOrigin.Begin); writer.Write(914 + vertical);
+                writer.Seek(0x0002389F, SeekOrigin.Begin); writer.Write(1036 + horizontal);
+                writer.Seek(0x000238A9, SeekOrigin.Begin); writer.Write(931 + vertical);
+                writer.Seek(0x000DC862, SeekOrigin.Begin); writer.Write(width);
+                writer.Seek(0x000DC86E, SeekOrigin.Begin); writer.Write(height);
+                writer.Seek(0x000DC876, SeekOrigin.Begin); writer.Write(width);
+                writer.Seek(0x1d95f, SeekOrigin.Begin); writer.Write(height - 600);
+            }
+            ApplyCore(writer, width, height, scrollPercent);
+        }
+
+        static void ApplyCore(BinaryWriter writer, int width, int height, int scrollPercent)
         {
             var scroll = BuildScroll(scrollPercent);
             // Both input paths converge here, before map boundary checks and camera updates.
@@ -109,29 +163,45 @@ namespace AtroxLauncher
             writer.Seek(RallyCave, SeekOrigin.Begin); writer.Write(BuildResourceRally());
             writer.Seek(0x104118, SeekOrigin.Begin);
             writer.Write((byte)0xe8); writer.Write(RallyCave - 0x104118 - 5); writer.Write((byte)0x90);
-            if (!highResolution) return;
+            if (width == 800) return;
             // The game input window still covered only 800x600 even when the
             // DirectDraw surface/HUD had been enlarged. Stationary hotkeys in
             // the added lower/right area must use the same input bounds.
             Expect(writer, 0x195a9, BitConverter.GetBytes(800));
             Expect(writer, 0x195ae, BitConverter.GetBytes(600));
-            writer.Seek(0x195a9, SeekOrigin.Begin); writer.Write(1280);
-            writer.Seek(0x195ae, SeekOrigin.Begin); writer.Write(1024);
+            writer.Seek(0x195a9, SeekOrigin.Begin); writer.Write(width);
+            writer.Seek(0x195ae, SeekOrigin.Begin); writer.Write(height);
             // Keep the HUD sprite hit test; remove the old 800x600-era full-width Y cutoff.
             Expect(writer, 0x1d5c4, new byte[] { 0xe6, 1, 0, 0 });
-            writer.Seek(0x1d5c4, SeekOrigin.Begin); writer.Write(1024);
+            writer.Seek(0x1d5c4, SeekOrigin.Begin); writer.Write(height);
             // Render the world to the bottom; the centered HUD draws over it afterwards.
             // Remove the old black side fills entirely, retaining the game's normal UI/cursor pass.
-            Expect(writer, 0xdc87d, new byte[] { 0xb0, 3, 0, 0 });
-            writer.Seek(0xdc87d, SeekOrigin.Begin); writer.Write(1024);
+            Expect(writer, 0xdc87d, BitConverter.GetBytes(480));
+            writer.Seek(0xdc87d, SeekOrigin.Begin); writer.Write(height);
             Expect(writer, TerrainCave, Enumerable.Repeat((byte)0xcc, 176).ToArray());
             Expect(writer, 0xdc8f3, new byte[] { 0xf7, 0xe9, 0xc1, 0xfa, 4 });
             Expect(writer, 0xb8e69, new byte[] { 0x83, 0xc0, 0xd8, 0x55, 0x57, 0xb9, 0xf0, 0x8c, 0xde, 0 });
-            // Secondary terrain surface: 1024 + 56 = 1080, matching 27 cached 40-pixel rows.
+            // Cache holds ceil(height / 40) rows plus one scrolling row.
+            byte extraHeight = checked((byte)(((height + 39) / 40 + 1) * 40 - height));
             Expect(writer, 0x17c60d, new byte[] { 0x83, 0xc2, 0xd8 });
             Expect(writer, 0x17561d, new byte[] { 0x8d, 0x46, 0xd8 });
-            writer.Seek(0x17c60f, SeekOrigin.Begin); writer.Write((byte)56);
-            writer.Seek(0x17561f, SeekOrigin.Begin); writer.Write((byte)56);
+            writer.Seek(0x17c60f, SeekOrigin.Begin); writer.Write(extraHeight);
+            writer.Seek(0x17561f, SeekOrigin.Begin); writer.Write(extraHeight);
+            if (width == 1024)
+            {
+                // ceil(width / 40) feeds the engine's paired 80px tile columns.
+                // 1024 needs fourteen cache columns (1120px), not thirteen.
+                Expect(writer, 0xdc8d6, new byte[] {0xf7,0xe9,0xc1,0xfa,4});
+                Expect(writer, 0xb8e2f, new byte[] {0x83,0xc0,0xb0,0x89,0x44,0x24,0x2c});
+                Expect(writer, 0x175612, new byte[] {0x8d,0x55,0x50});
+                Expect(writer, 0x17c61f, new byte[] {0x8d,0x4f,0x50});
+                writer.Seek(0x175614, SeekOrigin.Begin); writer.Write((byte)96);
+                writer.Seek(0x17c621, SeekOrigin.Begin); writer.Write((byte)96);
+                writer.Seek(TerrainCave + 64, SeekOrigin.Begin); writer.Write(BuildTileColumns());
+                writer.Seek(TerrainCave + 96, SeekOrigin.Begin); writer.Write(BuildTerrainHorizontalWrap());
+                WriteJump(writer, 0xdc8d6, TerrainCave + 64, 5);
+                WriteJump(writer, 0xb8e2f, TerrainCave + 96, 7);
+            }
             writer.Seek(TerrainCave, SeekOrigin.Begin); writer.Write(BuildTileRows());
             writer.Seek(TerrainCave + 32, SeekOrigin.Begin); writer.Write(BuildTerrainWrap());
             WriteJump(writer, 0xdc8f3, TerrainCave, 5);
